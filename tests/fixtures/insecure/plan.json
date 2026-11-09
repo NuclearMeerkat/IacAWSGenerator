@@ -1,0 +1,24 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.16.6",
+  "resource_changes": [
+    {
+      "address": "aws_security_group.open",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "change": {
+        "actions": ["create"]
+      }
+    }
+  ],
+  "variables": {
+    "password": "supersecretvalue"
+  },
+  "planned_values": {
+    "outputs": {
+      "access_key": {
+        "value": "AKIAIOSFODNN7EXAMPLE"
+      }
+    }
+  }
+}

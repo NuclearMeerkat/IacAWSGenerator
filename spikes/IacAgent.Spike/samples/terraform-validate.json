@@ -1,0 +1,18 @@
+{
+  "format_version": "1.0",
+  "valid": false,
+  "error_count": 1,
+  "warning_count": 0,
+  "diagnostics": [
+    {
+      "severity": "error",
+      "summary": "Missing expression",
+      "detail": "Expected the start of an expression, but found the end of the file.",
+      "range": {
+        "filename": "main.tf",
+        "start": { "line": 2, "column": 11, "byte": 28 },
+        "end": { "line": 2, "column": 11, "byte": 28 }
+      }
+    }
+  ]
+}
