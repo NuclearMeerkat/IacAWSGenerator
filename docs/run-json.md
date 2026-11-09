@@ -34,6 +34,6 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
 | tokens | Sum of iteration tokens. Phase 1 writes zeros because it does not call a model. |
 | iterations | One entry per agent-and-gate pass. `gates` is empty until gates are registered. |
 | assumptions | Notes collected from agents. |
-| outcome | `Succeeded`, `GateFailed`, `BudgetExceeded`, `NeedsHuman`, or `ConfigError`. `BudgetExceeded` is also used when the Infracost estimate is above `--budget`; the readable explanation is in `escalation.md`. |
+| outcome | `Succeeded`, `GateFailed`, `BudgetExceeded`, `NeedsHuman`, or `ConfigError`. `BudgetExceeded` means the Infracost estimate is above `--budget`. A token limit stops as `GateFailed` unless every remaining issue is that budget rule. The readable explanation is in `escalation.md`. |
 
 Secret values are not written. The OpenRouter API key is read only from `OPENROUTER_API_KEY` and is not a field in this file.

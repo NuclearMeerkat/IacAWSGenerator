@@ -69,15 +69,17 @@ public sealed class RepairLoopTests
     }
 
     [Fact]
-    public async Task RunAsync_TokenLimit_ReturnsBudgetExceeded()
+    public async Task RunAsync_TokenLimit_ReturnsGateFailed()
     {
         var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
         try
         {
             var runner = CreateRunner(new SwitchingDeveloper(), new ContentFailGate(), maxTokens: 1);
             var result = await runner.RunAsync(Request(directory), CancellationToken.None);
+            var report = await File.ReadAllTextAsync(Path.Combine(directory, "escalation.md"));
 
-            Assert.Equal(RunOutcome.BudgetExceeded, result.Outcome);
+            Assert.Equal(RunOutcome.GateFailed, result.Outcome);
+            Assert.Contains("Outcome: GateFailed", report, StringComparison.Ordinal);
         }
         finally
         {

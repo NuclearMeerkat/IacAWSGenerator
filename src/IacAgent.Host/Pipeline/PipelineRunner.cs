@@ -203,8 +203,7 @@ public sealed class PipelineRunner
 
             if (OverTokenLimit(profile, tokens))
             {
-                await EscalationReport.WriteAsync(outputDirectory, RunOutcome.BudgetExceeded, lastResults, cancellationToken).ConfigureAwait(false);
-                return RunOutcome.BudgetExceeded;
+                return await StopAsync(outputDirectory, lastResults, cancellationToken).ConfigureAwait(false);
             }
 
             var signature = IssueSignature.Create(lastResults);
