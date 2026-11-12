@@ -27,9 +27,9 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
 | startedAtUtc | UTC start time in ISO-8601. |
 | durationMs | Elapsed time until `run.json` is written. |
 | profile | The profile name that was requested. |
-| prompt | The user prompt. |
+| prompt | The user prompt, with secrets redacted. |
 | models.strong | Strong-tier model id from configuration. Empty when unset. |
-| models.cheap | Cheap-tier model id from configuration. Empty when unset. |
+| models.cheap | Cheap-tier model id that the run used. When the cheap id is unset, this is the strong model id. |
 | models.provider | `openrouter` when no endpoint is set. `local` when `--endpoint` or `IACAGENT_ENDPOINT` is set. |
 | tokens | Sum of iteration tokens. Phase 1 writes zeros because it does not call a model. |
 | iterations | One entry per agent-and-gate pass. `gates` is empty until gates are registered. |

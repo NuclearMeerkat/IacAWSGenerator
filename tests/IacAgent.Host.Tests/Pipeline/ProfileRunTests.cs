@@ -145,6 +145,11 @@ public sealed class ProfileRunTests
         {
             return client;
         }
+
+        public string GetModelId(ModelTier tier)
+        {
+            return "test-model";
+        }
     }
 
     private sealed class SilentInteraction : IUserInteraction

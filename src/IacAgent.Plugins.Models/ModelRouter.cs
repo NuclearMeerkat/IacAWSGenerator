@@ -15,11 +15,15 @@ internal sealed class ModelRouter(ModelConnection connection) : IModelRouter
     private const string OpenRouterEndpoint = "https://openrouter.ai/api/v1";
 
     /// <inheritdoc />
+    public string GetModelId(ModelTier tier)
+    {
+        return SelectModel(tier);
+    }
+
+    /// <inheritdoc />
     public IChatClient GetClient(ModelTier tier)
     {
-        var model = tier == ModelTier.Cheap && string.IsNullOrWhiteSpace(connection.CheapModel)
-            ? connection.StrongModel
-            : tier == ModelTier.Strong ? connection.StrongModel : connection.CheapModel;
+        var model = SelectModel(tier);
         if (string.IsNullOrWhiteSpace(model))
         {
             throw new InvalidOperationException($"Set a model id for the {tier.ToString().ToLowerInvariant()} tier.");
@@ -44,6 +48,17 @@ internal sealed class ModelRouter(ModelConnection connection) : IModelRouter
 
         var localKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
         return CreateOpenAiClient(model, string.IsNullOrWhiteSpace(localKey) ? "local" : localKey, endpoint.AbsoluteUri);
+    }
+
+    private string SelectModel(ModelTier tier)
+    {
+        if (tier == ModelTier.Cheap && string.IsNullOrWhiteSpace(connection.CheapModel))
+        {
+            return connection.StrongModel ?? string.Empty;
+        }
+
+        var selected = tier == ModelTier.Strong ? connection.StrongModel : connection.CheapModel;
+        return selected ?? string.Empty;
     }
 
     /// <summary>Ollama is detected by port 11434 or a host name that contains "ollama".</summary>

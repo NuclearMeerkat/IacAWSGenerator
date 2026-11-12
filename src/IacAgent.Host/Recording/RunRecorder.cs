@@ -11,6 +11,9 @@ namespace IacAgent.Host.Recording;
 public sealed class RunRecorder : IRunRecorder
 {
     private readonly GenerateRequest _request;
+    private readonly IReadOnlyList<IRedactionRule> _rules;
+    private readonly string? _strongModel;
+    private readonly string? _cheapModel;
     private readonly string _runId;
     private readonly DateTime _startedAtUtc;
     private readonly Stopwatch _stopwatch;
@@ -20,10 +23,13 @@ public sealed class RunRecorder : IRunRecorder
     private int _outputTokens;
 
     /// <summary>Starts timing a run.</summary>
-    public RunRecorder(GenerateRequest request)
+    public RunRecorder(GenerateRequest request, IEnumerable<IRedactionRule>? rules = null, string? strongModel = null, string? cheapModel = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         _request = request;
+        _rules = rules?.ToList() ?? [];
+        _strongModel = strongModel;
+        _cheapModel = cheapModel;
         _runId = Guid.NewGuid().ToString("D");
         _startedAtUtc = DateTime.UtcNow;
         _stopwatch = Stopwatch.StartNew();
@@ -59,6 +65,34 @@ public sealed class RunRecorder : IRunRecorder
         });
     }
 
+    /// <summary>Adds tokens from a call that happened after the iteration was recorded.</summary>
+    public void Include(TokenCount tokens)
+    {
+        if (tokens.Input == 0 && tokens.Output == 0)
+        {
+            return;
+        }
+
+        _inputTokens += tokens.Input;
+        _outputTokens += tokens.Output;
+        if (_iterations.Count == 0)
+        {
+            return;
+        }
+
+        var last = _iterations[^1];
+        _iterations[^1] = new RunIterationDocument
+        {
+            Index = last.Index,
+            Gates = last.Gates,
+            Tokens = new RunTokensDocument
+            {
+                Input = last.Tokens.Input + tokens.Input,
+                Output = last.Tokens.Output + tokens.Output,
+            },
+        };
+    }
+
     /// <inheritdoc />
     public async Task WriteAsync(string outputDirectory, RunOutcome outcome, CancellationToken cancellationToken)
     {
@@ -80,11 +114,11 @@ public sealed class RunRecorder : IRunRecorder
             StartedAtUtc = _startedAtUtc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
             DurationMs = _stopwatch.ElapsedMilliseconds,
             Profile = _request.Profile,
-            Prompt = _request.Prompt,
+            Prompt = Redact(_request.Prompt),
             Models = new RunModelsDocument
             {
-                Strong = _request.ModelStrong ?? string.Empty,
-                Cheap = _request.ModelCheap ?? string.Empty,
+                Strong = string.IsNullOrWhiteSpace(_strongModel) ? _request.ModelStrong ?? string.Empty : _strongModel,
+                Cheap = string.IsNullOrWhiteSpace(_cheapModel) ? _request.ModelCheap ?? string.Empty : _cheapModel,
                 Provider = string.IsNullOrWhiteSpace(_request.Endpoint) ? "openrouter" : "local",
             },
             Tokens = new RunTokensDocument
@@ -93,8 +127,18 @@ public sealed class RunRecorder : IRunRecorder
                 Output = _outputTokens,
             },
             Iterations = _iterations,
-            Assumptions = _assumptions,
+            Assumptions = _assumptions.Select(Redact).ToList(),
             Outcome = outcome.ToString(),
         };
+    }
+
+    private string Redact(string text)
+    {
+        foreach (var rule in _rules)
+        {
+            text = rule.Redact(text);
+        }
+
+        return text;
     }
 }

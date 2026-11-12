@@ -5,7 +5,9 @@ using IacAgent.Core;
 using IacAgent.Host;
 using IacAgent.Host.Configuration;
 using IacAgent.Host.Pipeline;
+using IacAgent.Plugins.Models;
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -129,6 +131,18 @@ public sealed class PipelineRunnerTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Fact]
+    public void GetModelId_EmptyCheap_UsesStrongModel()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(new ModelConnection("strong-id", null, null));
+        services.AddModels(new ConfigurationBuilder().Build());
+
+        var id = services.BuildServiceProvider().GetRequiredService<IModelRouter>().GetModelId(ModelTier.Cheap);
+
+        Assert.Equal("strong-id", id);
     }
 
     [Fact]

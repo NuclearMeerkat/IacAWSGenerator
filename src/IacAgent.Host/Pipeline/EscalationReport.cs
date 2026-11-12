@@ -8,6 +8,8 @@ internal static class EscalationReport
         string directory,
         RunOutcome outcome,
         IReadOnlyList<GateResult> results,
+        IReadOnlyList<GeneratedFile> lastAttempt,
+        IEnumerable<IRedactionRule> rules,
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(directory);
@@ -26,7 +28,7 @@ internal static class EscalationReport
         {
             any = true;
             var line = issue.Line?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-";
-            lines.Add($"- {gate} {issue.File}:{line} [{issue.Severity}] {issue.RuleId}: {issue.Message}");
+            lines.Add($"- {gate} {issue.File}:{line} [{issue.Severity}] {issue.RuleId}: {Redact(issue.Message, rules)}");
         }
 
         if (!any)
@@ -34,7 +36,31 @@ internal static class EscalationReport
             lines.Add("- None.");
         }
 
+        lines.Add(string.Empty);
+        lines.Add("## Last attempt");
+        if (lastAttempt.Count == 0)
+        {
+            lines.Add("None.");
+        }
+
+        foreach (var file in lastAttempt)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"### {file.RelativePath}");
+            lines.Add(Redact(file.Content, rules));
+        }
+
         var path = Path.Combine(directory, "escalation.md");
         await File.WriteAllLinesAsync(path, lines, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string Redact(string text, IEnumerable<IRedactionRule> rules)
+    {
+        foreach (var rule in rules)
+        {
+            text = rule.Redact(text);
+        }
+
+        return text;
     }
 }

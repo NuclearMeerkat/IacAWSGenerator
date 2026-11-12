@@ -113,6 +113,11 @@ public sealed class AgentsServiceCollectionExtensionsTests
         {
             return client;
         }
+
+        public string GetModelId(ModelTier tier)
+        {
+            return "test-model";
+        }
     }
 
     private sealed class RecordingInteraction : IUserInteraction

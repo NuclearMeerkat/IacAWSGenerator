@@ -47,6 +47,11 @@ public sealed class PlanReviewerTests
         {
             return client;
         }
+
+        public string GetModelId(ModelTier tier)
+        {
+            return "test-model";
+        }
     }
 
     private sealed class EchoChatClient : IChatClient

@@ -13,13 +13,17 @@ public sealed class PipelineRunner
     private readonly IReadOnlyList<IGate> _gates;
     private readonly IServiceProvider _services;
     private readonly ILogger<PipelineRunner> _logger;
+    private readonly IModelRouter? _router;
+    private readonly IReadOnlyList<IRedactionRule> _rules;
 
     /// <summary>Creates a runner from the registered profiles and gates.</summary>
     public PipelineRunner(
         ProfileCatalog catalog,
         IEnumerable<IGate> gates,
         IServiceProvider services,
-        ILogger<PipelineRunner> logger)
+        ILogger<PipelineRunner> logger,
+        IModelRouter? router = null,
+        IEnumerable<IRedactionRule>? rules = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(gates);
@@ -29,6 +33,8 @@ public sealed class PipelineRunner
         _gates = gates.OrderBy(gate => gate.Order).ToList();
         _services = services;
         _logger = logger;
+        _router = router;
+        _rules = rules?.ToList() ?? [];
     }
 
     /// <summary>Runs one generate request.</summary>
@@ -36,7 +42,7 @@ public sealed class PipelineRunner
     {
         ArgumentNullException.ThrowIfNull(request);
         var outputDirectory = Path.GetFullPath(request.OutputDirectory);
-        var recorder = new RunRecorder(request);
+        var recorder = new RunRecorder(request, _rules, _router?.GetModelId(ModelTier.Strong), _router?.GetModelId(ModelTier.Cheap));
         var profile = _catalog.Create(request.Profile, _services);
         if (profile is null)
         {
@@ -53,16 +59,22 @@ public sealed class PipelineRunner
             request.MaxRepairIterations);
 
         var assumptions = new List<string>();
-        var (requirements, tokens, needsHuman) = await RunOrchestratorsAsync(profile, request, assumptions, cancellationToken).ConfigureAwait(false);
-        if (needsHuman)
+        var opening = await RunOrchestratorsAsync(profile, request, assumptions, cancellationToken).ConfigureAwait(false);
+        if (opening.NeedsHuman)
         {
+            recorder.RecordIteration(new IterationRecord(1, [], opening.Tokens));
             recorder.AddAssumptions(assumptions);
             await recorder.WriteAsync(outputDirectory, RunOutcome.NeedsHuman, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Run finished with {Outcome}.", RunOutcome.NeedsHuman);
             return new PipelineResult(RunOutcome.NeedsHuman, outputDirectory);
         }
 
-        (requirements, tokens) = await RunAdvisorsAsync(profile, request, requirements, assumptions, tokens, cancellationToken).ConfigureAwait(false);
+        if (opening.Failed)
+        {
+            return await StopOpeningAsync(outputDirectory, assumptions, recorder, opening, cancellationToken).ConfigureAwait(false);
+        }
+
+        var (requirements, tokens) = await RunAdvisorsAsync(profile, request, opening.Requirements, assumptions, opening.Tokens, cancellationToken).ConfigureAwait(false);
         var outcome = await RunDevelopersAsync(profile, request, outputDirectory, requirements, assumptions, recorder, tokens, cancellationToken).ConfigureAwait(false);
         recorder.AddAssumptions(assumptions);
         await recorder.WriteAsync(outputDirectory, outcome, cancellationToken).ConfigureAwait(false);
@@ -70,7 +82,7 @@ public sealed class PipelineRunner
         return new PipelineResult(outcome, outputDirectory);
     }
 
-    private async Task<(string? Requirements, TokenCount Tokens, bool NeedsHuman)> RunOrchestratorsAsync(
+    private async Task<Opening> RunOrchestratorsAsync(
         PipelineProfile profile,
         GenerateRequest request,
         List<string> assumptions,
@@ -84,9 +96,15 @@ public sealed class PipelineRunner
             var result = await agent.RunAsync(new AgentContext(request.Prompt, request.AutoApprove), cancellationToken).ConfigureAwait(false);
             assumptions.AddRange(result.Assumptions);
             tokens = Add(tokens, result.Tokens);
+            if (result.Failed)
+            {
+                assumptions.Add(result.FailureMessage ?? "The orchestrator failed.");
+                return new Opening(requirements, tokens, false, true, result.FailureMessage);
+            }
+
             if (result.NeedsHuman)
             {
-                return (requirements, tokens, true);
+                return new Opening(requirements, tokens, true, false, result.FailureMessage);
             }
 
             if (!string.IsNullOrWhiteSpace(result.RequirementsJson))
@@ -95,7 +113,7 @@ public sealed class PipelineRunner
             }
         }
 
-        return (requirements, tokens, false);
+        return new Opening(requirements, tokens, false, false, null);
     }
 
     private async Task<(string? Requirements, TokenCount Tokens)> RunAdvisorsAsync(
@@ -164,7 +182,7 @@ public sealed class PipelineRunner
                 tokens = Add(tokens, result.Tokens);
                 if (result.Files is not null)
                 {
-                    files = result.Files.ToList();
+                    files = repairs == 0 ? result.Files.ToList() : WorkspaceFiles.Merge(files, result.Files);
                 }
 
                 failedWithoutFiles = result.Failed && result.Files is null;
@@ -197,24 +215,25 @@ public sealed class PipelineRunner
 
             if (lastResults.All(result => result.Passed))
             {
-                await RunReviewerAsync(profile, request, outputDirectory, requirements, files, lastResults, assumptions, cancellationToken).ConfigureAwait(false);
+                var reviewTokens = await RunReviewerAsync(profile, request, outputDirectory, requirements, files, lastResults, assumptions, cancellationToken).ConfigureAwait(false);
+                recorder.Include(reviewTokens);
                 return RunOutcome.Succeeded;
             }
 
             if (OverTokenLimit(profile, tokens))
             {
-                return await StopAsync(outputDirectory, lastResults, cancellationToken).ConfigureAwait(false);
+                return await StopAsync(outputDirectory, lastResults, files, cancellationToken).ConfigureAwait(false);
             }
 
             var signature = IssueSignature.Create(lastResults);
             if (previousSignature is not null && signature == previousSignature)
             {
-                return await StopAsync(outputDirectory, lastResults, cancellationToken).ConfigureAwait(false);
+                return await StopAsync(outputDirectory, lastResults, files, cancellationToken).ConfigureAwait(false);
             }
 
             if (repairs >= request.MaxRepairIterations)
             {
-                return await StopAsync(outputDirectory, lastResults, cancellationToken).ConfigureAwait(false);
+                return await StopAsync(outputDirectory, lastResults, files, cancellationToken).ConfigureAwait(false);
             }
 
             previousSignature = signature;
@@ -222,14 +241,35 @@ public sealed class PipelineRunner
         }
     }
 
-    private static async Task<RunOutcome> StopAsync(
+    private async Task<RunOutcome> StopAsync(
         string outputDirectory,
         IReadOnlyList<GateResult> results,
+        IReadOnlyList<GeneratedFile> files,
         CancellationToken cancellationToken)
     {
         var outcome = FailureOutcome(results);
-        await EscalationReport.WriteAsync(outputDirectory, outcome, results, cancellationToken).ConfigureAwait(false);
+        await EscalationReport.WriteAsync(outputDirectory, outcome, results, files, _rules, cancellationToken).ConfigureAwait(false);
         return outcome;
+    }
+
+    private async Task<PipelineResult> StopOpeningAsync(
+        string outputDirectory,
+        List<string> assumptions,
+        RunRecorder recorder,
+        Opening opening,
+        CancellationToken cancellationToken)
+    {
+        var message = opening.FailureMessage ?? "The orchestrator failed.";
+        var results = new GateResult[]
+        {
+            new("orchestrator", false, [new GateIssue(string.Empty, null, "orchestrator", "error", message)]),
+        };
+        recorder.RecordIteration(new IterationRecord(1, [new GateSummary("orchestrator", false, 1)], opening.Tokens));
+        recorder.AddAssumptions(assumptions);
+        await EscalationReport.WriteAsync(outputDirectory, RunOutcome.GateFailed, results, [], _rules, cancellationToken).ConfigureAwait(false);
+        await recorder.WriteAsync(outputDirectory, RunOutcome.GateFailed, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Run finished with {Outcome}.", RunOutcome.GateFailed);
+        return new PipelineResult(RunOutcome.GateFailed, outputDirectory);
     }
 
     private static RunOutcome FailureOutcome(IReadOnlyList<GateResult> results)
@@ -255,7 +295,7 @@ public sealed class PipelineRunner
         return results;
     }
 
-    private async Task RunReviewerAsync(
+    private async Task<TokenCount> RunReviewerAsync(
         PipelineProfile profile,
         GenerateRequest request,
         string outputDirectory,
@@ -268,7 +308,7 @@ public sealed class PipelineRunner
         var reviewer = profile.Agents.FirstOrDefault(agent => agent.Role == AgentRole.Reviewer);
         if (reviewer is null || !results.SelectMany(result => result.Issues).Any(IsLowSeverity))
         {
-            return;
+            return new TokenCount(0, 0);
         }
 
         var result = await reviewer.RunAsync(
@@ -277,9 +317,24 @@ public sealed class PipelineRunner
         assumptions.AddRange(result.Assumptions);
         if (!string.IsNullOrWhiteSpace(result.Review))
         {
-            await File.WriteAllTextAsync(Path.Combine(outputDirectory, "review.md"), result.Review, cancellationToken).ConfigureAwait(false);
+            var review = Redact(result.Review);
+            await File.WriteAllTextAsync(Path.Combine(outputDirectory, "review.md"), review, cancellationToken).ConfigureAwait(false);
         }
+
+        return result.Tokens ?? new TokenCount(0, 0);
     }
+
+    private string Redact(string text)
+    {
+        foreach (var rule in _rules)
+        {
+            text = rule.Redact(text);
+        }
+
+        return text;
+    }
+
+    private sealed record Opening(string? Requirements, TokenCount Tokens, bool NeedsHuman, bool Failed, string? FailureMessage);
 
     private static bool OverTokenLimit(PipelineProfile profile, TokenCount tokens)
     {

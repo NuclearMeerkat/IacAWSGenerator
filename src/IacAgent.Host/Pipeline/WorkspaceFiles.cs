@@ -4,6 +4,23 @@ namespace IacAgent.Host.Pipeline;
 
 internal static class WorkspaceFiles
 {
+    /// <summary>Keeps earlier files and replaces only the paths present in the update.</summary>
+    public static List<GeneratedFile> Merge(IReadOnlyList<GeneratedFile> current, IReadOnlyList<GeneratedFile> updates)
+    {
+        var merged = new Dictionary<string, GeneratedFile>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in current)
+        {
+            merged[Key(file.RelativePath)] = file;
+        }
+
+        foreach (var file in updates)
+        {
+            merged[Key(file.RelativePath)] = file;
+        }
+
+        return merged.Values.ToList();
+    }
+
     public static void ReplaceTerraformFiles(string directory, IReadOnlyList<GeneratedFile> files)
     {
         Directory.CreateDirectory(directory);
@@ -40,5 +57,10 @@ internal static class WorkspaceFiles
 
             File.WriteAllText(destination, file.Content);
         }
+    }
+
+    private static string Key(string path)
+    {
+        return path.Replace('\\', '/').TrimStart('/');
     }
 }
