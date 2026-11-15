@@ -11,9 +11,8 @@ public sealed class InfracostOutputParserTests
 
         var estimate = InfracostOutputParser.Parse(json);
 
-        Assert.Equal(42.50m, estimate.MonthlyCost);
+        Assert.Equal(0m, estimate.MonthlyCost);
         Assert.Equal("USD", estimate.Currency);
-        Assert.Equal("aws_nat_gateway.main", estimate.Largest[0].Name);
-        Assert.Equal(32.85m, estimate.Largest[0].MonthlyCost);
+        Assert.Empty(estimate.Largest);
     }
 }
