@@ -52,6 +52,11 @@ public sealed class PlanReviewerTests
         {
             return "test-model";
         }
+
+        public Microsoft.Extensions.AI.ChatOptions CreateChatOptions()
+        {
+            return new Microsoft.Extensions.AI.ChatOptions();
+        }
     }
 
     private sealed class EchoChatClient : IChatClient

@@ -67,7 +67,8 @@ public sealed class ProfileRunTests
                 services,
                 NullLogger<PipelineRunner>.Instance,
                 new FixedRouter(new ScriptedChatClient()),
-                []);
+                [],
+                new QuietProcessRunner());
 
             var result = await runner.RunAsync(Request(directory, "human"), CancellationToken.None);
 
@@ -87,6 +88,7 @@ public sealed class ProfileRunTests
         services.AddLogging();
         services.AddSingleton<IModelRouter>(new FixedRouter(new ScriptedChatClient(Replies(profile))));
         services.AddSingleton<IUserInteraction, SilentInteraction>();
+        services.AddSingleton<IProcessRunner, QuietProcessRunner>();
         services.AddAgents(new ConfigurationBuilder().Build());
         services.AddHost(new ConfigurationBuilder().Build());
         return services.BuildServiceProvider().GetRequiredService<PipelineRunner>();
@@ -151,6 +153,11 @@ public sealed class ProfileRunTests
         public string GetModelId(ModelTier tier)
         {
             return "test-model";
+        }
+
+        public Microsoft.Extensions.AI.ChatOptions CreateChatOptions()
+        {
+            return new Microsoft.Extensions.AI.ChatOptions();
         }
     }
 

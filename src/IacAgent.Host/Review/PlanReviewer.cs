@@ -54,7 +54,7 @@ public sealed class PlanReviewer(IEnumerable<IGate> gates, IModelRouter router, 
         var client = router.GetClient(ModelTier.Cheap);
         var response = await client.GetResponseAsync(
             [new ChatMessage(ChatRole.System, SystemPrompt), new ChatMessage(ChatRole.User, user.ToString())],
-            options: null,
+            router.CreateChatOptions(),
             cancellationToken).ConfigureAwait(false);
         return response.Text ?? string.Empty;
     }

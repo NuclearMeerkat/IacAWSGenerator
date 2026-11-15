@@ -6,10 +6,16 @@
   profile: trio,
   prompt: hello,
   security: baseline,
+  toolVersion: ,
+  tools: {
+    terraform: Terraform v1.2.3,
+    checkov: 3.3.30
+  },
   models: {
     strong: test-model,
     cheap: test-model,
-    provider: openrouter
+    provider: openrouter,
+    temperature: 0.2
   },
   tokens: {
     input: 0,
@@ -23,7 +29,8 @@
           name: checkov,
           passed: true,
           issueCount: 1,
-          blockingCount: 0
+          blockingCount: 0,
+          durationMs: {Scrubbed}
         }
       ],
       tokens: {

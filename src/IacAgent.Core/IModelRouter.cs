@@ -10,4 +10,7 @@ public interface IModelRouter
 
     /// <summary>Returns the model id the tier will use, including the strong-model fallback.</summary>
     string GetModelId(ModelTier tier);
+
+    /// <summary>Returns chat options for this run. Temperature is null when the run sends none.</summary>
+    ChatOptions CreateChatOptions();
 }

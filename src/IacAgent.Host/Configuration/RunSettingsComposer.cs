@@ -28,6 +28,7 @@ public static class RunSettingsComposer
             MaxRepairIterations = command.MaxRepairIterations ?? environment.MaxRepairIterations ?? file.MaxRepairIterations,
             MaxTotalTokens = command.MaxTotalTokens ?? environment.MaxTotalTokens ?? file.MaxTotalTokens,
             Security = NormalizeSecurity(FirstText(command.Security, environment.Security, file.Security)) ?? "baseline",
+            Temperature = FirstText(command.Temperature, environment.Temperature, file.Temperature) ?? "0.2",
             AutoApprove = command.AutoApprove ?? environment.AutoApprove ?? file.AutoApprove ?? false,
             Verbose = command.Verbose ?? environment.Verbose ?? file.Verbose ?? false,
             BudgetText = budgetText,
@@ -52,6 +53,11 @@ public static class RunSettingsComposer
         if (!IsSecurity(settings.Security))
         {
             return "--security must be baseline or strict.";
+        }
+
+        if (!IsTemperature(settings.Temperature))
+        {
+            return "--temperature must be a number from 0 to 2, or none.";
         }
 
         if (string.IsNullOrWhiteSpace(settings.Profile))
@@ -100,6 +106,17 @@ public static class RunSettingsComposer
     private static bool IsSecurity(string value)
     {
         return value is "baseline" or "strict";
+    }
+
+    private static bool IsTemperature(string value)
+    {
+        if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var temperature)
+            && temperature is >= 0f and <= 2f;
     }
 
     private static string? FirstText(params string?[] values)

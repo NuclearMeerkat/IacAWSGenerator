@@ -53,15 +53,15 @@ public sealed class Doctor
             var result = await _processRunner.RunAsync(fileName, arguments, Path.GetTempPath(), timeout.Token).ConfigureAwait(false);
             if (result.ExitCode != 0)
             {
-                var error = FirstLine(result.StandardError);
+                var error = ToolVersionReader.FirstLine(result.StandardError);
                 var detail = error.Length == 0 ? $"{fileName} exited with code {result.ExitCode}." : error;
                 return new DoctorCheck(fileName, false, required, detail, fix);
             }
 
-            var version = FirstLine(result.StandardOutput);
+            var version = ToolVersionReader.FirstLine(result.StandardOutput);
             if (version.Length == 0)
             {
-                version = FirstLine(result.StandardError);
+                version = ToolVersionReader.FirstLine(result.StandardError);
             }
 
             var success = version.Length == 0 ? $"{fileName} is available." : version;
@@ -107,19 +107,5 @@ public sealed class Doctor
         {
             return new DoctorCheck("model", false, true, "The local endpoint did not respond in time.", EndpointFix);
         }
-    }
-
-    private static string FirstLine(string text)
-    {
-        foreach (var line in text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            var trimmed = line.Trim();
-            if (trimmed.Length > 0)
-            {
-                return trimmed;
-            }
-        }
-
-        return string.Empty;
     }
 }

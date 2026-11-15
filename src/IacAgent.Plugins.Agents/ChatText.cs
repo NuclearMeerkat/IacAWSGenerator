@@ -13,6 +13,7 @@ internal static class ChatText
         string systemPrompt,
         string userPrompt,
         IEnumerable<IRedactionRule> rules,
+        ChatOptions? options,
         CancellationToken cancellationToken)
     {
         var redacted = userPrompt;
@@ -23,11 +24,29 @@ internal static class ChatText
 
         var response = await client.GetResponseAsync(
             [new ChatMessage(ChatRole.System, systemPrompt), new ChatMessage(ChatRole.User, redacted)],
-            options: null,
+            options,
             cancellationToken).ConfigureAwait(false);
         var input = (int)(response.Usage?.InputTokenCount ?? 0);
         var output = (int)(response.Usage?.OutputTokenCount ?? 0);
-        return (response.Text ?? string.Empty, new TokenCount(input, output));
+        return (response.Text ?? string.Empty, new TokenCount(input, output, ReadCost(response.Usage)));
+    }
+
+    private static decimal? ReadCost(UsageDetails? usage)
+    {
+        if (usage?.AdditionalCounts is not { } counts)
+        {
+            return null;
+        }
+
+        foreach (var pair in counts)
+        {
+            if (pair.Key.Equals("cost", StringComparison.OrdinalIgnoreCase))
+            {
+                return pair.Value;
+            }
+        }
+
+        return null;
     }
 
     public static string ReadPrompt(string fileName)

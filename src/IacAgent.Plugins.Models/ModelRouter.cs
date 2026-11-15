@@ -21,6 +21,12 @@ internal sealed class ModelRouter(ModelConnection connection) : IModelRouter
     }
 
     /// <inheritdoc />
+    public ChatOptions CreateChatOptions()
+    {
+        return new ChatOptions { Temperature = connection.Temperature };
+    }
+
+    /// <inheritdoc />
     public IChatClient GetClient(ModelTier tier)
     {
         var model = SelectModel(tier);

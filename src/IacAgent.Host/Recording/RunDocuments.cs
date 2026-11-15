@@ -18,6 +18,8 @@ internal sealed class RunGateDocument
     public int IssueCount { get; init; }
 
     public int BlockingCount { get; init; }
+
+    public long DurationMs { get; init; }
 }
 
 internal sealed class RunIterationDocument
@@ -31,6 +33,9 @@ internal sealed class RunIterationDocument
     public int BlockingIssues { get; init; }
 
     public int AdvisoryIssues { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? CostUsd { get; init; }
 }
 
 internal sealed class RunModelsDocument
@@ -40,6 +45,15 @@ internal sealed class RunModelsDocument
     public required string Cheap { get; init; }
 
     public required string Provider { get; init; }
+
+    public required string Temperature { get; init; }
+}
+
+internal sealed class RunToolsDocument
+{
+    public required string Terraform { get; init; }
+
+    public required string Checkov { get; init; }
 }
 
 internal sealed class RunResourcesDocument
@@ -65,6 +79,10 @@ internal sealed class RunDocument
 
     public required string Security { get; init; }
 
+    public required string ToolVersion { get; init; }
+
+    public required RunToolsDocument Tools { get; init; }
+
     public required RunModelsDocument Models { get; init; }
 
     public required RunTokensDocument Tokens { get; init; }
@@ -78,6 +96,9 @@ internal sealed class RunDocument
     public required IReadOnlyList<string> Assumptions { get; init; }
 
     public required string Outcome { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? CostUsd { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Error { get; init; }

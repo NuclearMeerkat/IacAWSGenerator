@@ -27,6 +27,9 @@ public sealed class RunRecorder : IRunRecorder
     private TerraformResourceInventory.Result _resources = new(0, new Dictionary<string, int>());
     private int _inputTokens;
     private int _outputTokens;
+    private decimal? _costUsd;
+    private string _terraform = string.Empty;
+    private string _checkov = string.Empty;
     private string? _error;
 
     /// <summary>Starts timing a run.</summary>
@@ -65,6 +68,7 @@ public sealed class RunRecorder : IRunRecorder
                 Passed = gate.Passed,
                 IssueCount = gate.IssueCount,
                 BlockingCount = gate.BlockingCount,
+                DurationMs = gate.DurationMs,
             }).ToList(),
             Tokens = new RunTokensDocument
             {
@@ -73,19 +77,22 @@ public sealed class RunRecorder : IRunRecorder
             },
             BlockingIssues = record.Gates.Sum(gate => gate.BlockingCount),
             AdvisoryIssues = record.Gates.Sum(gate => gate.IssueCount - gate.BlockingCount),
+            CostUsd = record.Tokens.CostUsd,
         });
+        _costUsd = SumCost(_costUsd, record.Tokens.CostUsd);
     }
 
     /// <summary>Adds tokens from a call that happened after the iteration was recorded.</summary>
     public void Include(TokenCount tokens)
     {
-        if (tokens.Input == 0 && tokens.Output == 0)
+        if (tokens.Input == 0 && tokens.Output == 0 && tokens.CostUsd is null)
         {
             return;
         }
 
         _inputTokens += tokens.Input;
         _outputTokens += tokens.Output;
+        _costUsd = SumCost(_costUsd, tokens.CostUsd);
         if (_iterations.Count == 0)
         {
             return;
@@ -101,6 +108,9 @@ public sealed class RunRecorder : IRunRecorder
                 Input = last.Tokens.Input + tokens.Input,
                 Output = last.Tokens.Output + tokens.Output,
             },
+            BlockingIssues = last.BlockingIssues,
+            AdvisoryIssues = last.AdvisoryIssues,
+            CostUsd = SumCost(last.CostUsd, tokens.CostUsd),
         };
     }
 
@@ -116,6 +126,13 @@ public sealed class RunRecorder : IRunRecorder
     {
         ArgumentNullException.ThrowIfNull(resources);
         _resources = resources;
+    }
+
+    /// <summary>Records terraform and checkov versions for this run.</summary>
+    public void SetTools(string terraform, string checkov)
+    {
+        _terraform = terraform;
+        _checkov = checkov;
     }
 
     /// <summary>Stores the first line of a failure. Secrets are removed when the file is written.</summary>
@@ -147,11 +164,14 @@ public sealed class RunRecorder : IRunRecorder
             Profile = _request.Profile,
             Prompt = Redact(_request.Prompt),
             Security = _security,
+            ToolVersion = _request.ToolVersion,
+            Tools = new RunToolsDocument { Terraform = _terraform, Checkov = _checkov },
             Models = new RunModelsDocument
             {
                 Strong = string.IsNullOrWhiteSpace(_strongModel) ? _request.ModelStrong ?? string.Empty : _strongModel,
                 Cheap = string.IsNullOrWhiteSpace(_cheapModel) ? _request.ModelCheap ?? string.Empty : _cheapModel,
                 Provider = string.IsNullOrWhiteSpace(_request.Endpoint) ? "openrouter" : "local",
+                Temperature = _request.Temperature,
             },
             Tokens = new RunTokensDocument
             {
@@ -167,6 +187,7 @@ public sealed class RunRecorder : IRunRecorder
             },
             Assumptions = _assumptions.Select(Redact).ToList(),
             Outcome = outcome.ToString(),
+            CostUsd = _costUsd,
             Error = _error is null ? null : Redact(_error),
         };
     }
@@ -179,5 +200,15 @@ public sealed class RunRecorder : IRunRecorder
         }
 
         return text;
+    }
+
+    private static decimal? SumCost(decimal? left, decimal? right)
+    {
+        if (left is null && right is null)
+        {
+            return null;
+        }
+
+        return (left ?? 0m) + (right ?? 0m);
     }
 }

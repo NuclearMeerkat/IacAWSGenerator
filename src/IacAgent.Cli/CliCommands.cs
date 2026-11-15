@@ -31,6 +31,7 @@ internal static class CliCommands
             MaxRepairIterations = ReadInt(parseResult, Find<int>(command, "--max-retries")),
             MaxTotalTokens = ReadInt(parseResult, Find<int>(command, "--max-tokens")),
             Security = ReadString(parseResult, Find<string>(command, "--security")),
+            Temperature = ReadString(parseResult, Find<string>(command, "--temperature")),
             AutoApprove = ReadBool(parseResult, Find<bool>(command, "--auto-approve")),
             Verbose = ReadBool(parseResult, Find<bool>(command, "--verbose")),
             Budget = ReadString(parseResult, Find<string>(command, "--budget")),
@@ -83,6 +84,7 @@ internal static class CliCommands
         command.Options.Add(new Option<int>("--max-retries") { Description = "Repair limit. Uses the profile value when omitted." });
         command.Options.Add(new Option<int>("--max-tokens") { Description = "Token limit for the run. Uses the profile value when omitted." });
         command.Options.Add(new Option<string>("--security") { Description = "Checkov policy: baseline or strict. Defaults to baseline." });
+        command.Options.Add(new Option<string>("--temperature") { Description = "Model temperature from 0 to 2, or none. Defaults to 0.2." });
         command.Options.Add(new Option<string>("--budget") { Description = "Maximum estimated cost in USD per month." });
         command.Options.Add(new Option<bool>("--auto-approve") { Description = "Skip interactive questions." });
         command.Options.Add(new Option<bool>("--verbose") { Description = "Write debug logs." });

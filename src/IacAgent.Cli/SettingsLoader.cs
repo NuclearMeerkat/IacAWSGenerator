@@ -29,6 +29,7 @@ internal static class SettingsLoader
             ["maxRetries"] = Environment.GetEnvironmentVariable("IACAGENT_MAX_RETRIES"),
             ["maxTokens"] = Environment.GetEnvironmentVariable("IACAGENT_MAX_TOKENS"),
             ["security"] = Environment.GetEnvironmentVariable("IACAGENT_SECURITY"),
+            ["temperature"] = Environment.GetEnvironmentVariable("IACAGENT_TEMPERATURE"),
             ["autoApprove"] = Environment.GetEnvironmentVariable("IACAGENT_AUTO_APPROVE"),
             ["verbose"] = Environment.GetEnvironmentVariable("IACAGENT_VERBOSE"),
             ["budget"] = Environment.GetEnvironmentVariable("IACAGENT_BUDGET"),
@@ -55,6 +56,7 @@ internal static class SettingsLoader
             MaxRepairIterations = ReadInt(configuration["maxRetries"], "maxRetries", source, errors),
             MaxTotalTokens = ReadInt(configuration["maxTokens"], "maxTokens", source, errors),
             Security = BlankToNull(configuration["security"]),
+            Temperature = BlankToNull(configuration["temperature"]),
             AutoApprove = ReadBool(configuration["autoApprove"], source, errors),
             Verbose = ReadBool(configuration["verbose"], source, errors),
         };

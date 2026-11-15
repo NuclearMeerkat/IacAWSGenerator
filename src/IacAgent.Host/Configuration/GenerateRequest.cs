@@ -12,4 +12,6 @@ public sealed record GenerateRequest(
     int? MaxTotalTokens,
     bool AutoApprove,
     bool Verbose = false,
-    string Security = "baseline");
+    string Security = "baseline",
+    string ToolVersion = "",
+    string Temperature = "0.2");

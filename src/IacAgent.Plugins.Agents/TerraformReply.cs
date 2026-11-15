@@ -48,9 +48,10 @@ internal static class TerraformReply
         string systemPrompt,
         string userPrompt,
         IEnumerable<IRedactionRule> rules,
+        ChatOptions? options,
         CancellationToken cancellationToken)
     {
-        var (text, tokens) = await ChatText.CompleteAsync(client, systemPrompt, userPrompt, rules, cancellationToken).ConfigureAwait(false);
+        var (text, tokens) = await ChatText.CompleteAsync(client, systemPrompt, userPrompt, rules, options, cancellationToken).ConfigureAwait(false);
         if (TryRead(text, out var files, out var assumptions))
         {
             return new AgentResult(assumptions, Files: files, Tokens: tokens);
@@ -61,8 +62,9 @@ internal static class TerraformReply
             systemPrompt,
             "Reply with only the JSON object {\"files\":[{\"path\":\"main.tf\",\"content\":\"...\"}]}.\n\n" + text,
             rules,
+            options,
             cancellationToken).ConfigureAwait(false);
-        tokens = new TokenCount(tokens.Input + retryTokens.Input, tokens.Output + retryTokens.Output);
+        tokens = tokens.Plus(retryTokens);
         if (TryRead(repaired, out files, out assumptions))
         {
             return new AgentResult(assumptions, Files: files, Tokens: tokens);

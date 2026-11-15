@@ -27,6 +27,7 @@ Command flags override environment variables, which override `iacagent.json` in 
 | `--max-retries` | `IACAGENT_MAX_RETRIES` | Repair limit. Uses the profile value, usually `3`, when omitted. |
 | `--max-tokens` | `IACAGENT_MAX_TOKENS` | Token limit for the run. Uses the profile value when omitted. |
 | `--security` | `IACAGENT_SECURITY` | Checkov policy: `baseline` or `strict`. Default `baseline`. |
+| `--temperature` | `IACAGENT_TEMPERATURE` | Model temperature from `0` to `2`, or `none`. Default `0.2`. |
 | `--budget` | `IACAGENT_BUDGET` | Maximum estimated cost in USD per month. Omit it to skip Infracost. |
 | `--auto-approve` | `IACAGENT_AUTO_APPROVE` | Skip interactive questions. |
 | `--verbose` | `IACAGENT_VERBOSE` | Debug logs. |

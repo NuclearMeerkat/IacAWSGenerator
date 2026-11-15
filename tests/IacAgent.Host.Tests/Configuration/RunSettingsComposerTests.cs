@@ -76,4 +76,15 @@ public sealed class RunSettingsComposerTests
 
         Assert.Equal("--security must be baseline or strict.", RunSettingsComposer.Validate(settings));
     }
+
+    [Fact]
+    public void Validate_TemperatureOutOfRange_ReturnsMessage()
+    {
+        var settings = RunSettingsComposer.Compose(
+            new SettingsOverlay(),
+            new SettingsOverlay(),
+            new SettingsOverlay { Temperature = "9" });
+
+        Assert.Equal("--temperature must be a number from 0 to 2, or none.", RunSettingsComposer.Validate(settings));
+    }
 }

@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Reflection;
 using System.Text.Json;
 
 using IacAgent.Core;
@@ -68,7 +69,9 @@ public static class Application
                 settings.MaxTotalTokens,
                 settings.AutoApprove,
                 settings.Verbose,
-                settings.Security),
+                settings.Security,
+                CliVersion(),
+                settings.Temperature),
             cancellationToken).ConfigureAwait(false);
         GenerateConsole.Write(result.Outcome, result.OutputDirectory);
         return ExitCodes.For(result.Outcome);
@@ -168,7 +171,7 @@ public static class Application
         {
             ["Checkov:Level"] = settings.Security,
         });
-        builder.Services.AddSingleton(new ModelConnection(settings.ModelStrong, settings.ModelCheap, settings.Endpoint));
+        builder.Services.AddSingleton(new ModelConnection(settings.ModelStrong, settings.ModelCheap, settings.Endpoint, Temperature(settings.Temperature)));
         builder.Services.AddSingleton<IUserInteraction, ConsoleUserInteraction>();
         builder.Services.AddSingleton<IRedactionRule, AwsAccessKeyRedactionRule>();
         builder.Services.AddSingleton<IRedactionRule, OpenRouterKeyRedactionRule>();
@@ -181,5 +184,21 @@ public static class Application
         builder.Services.AddSingleton(new BudgetLimit(settings.MonthlyBudgetUsd));
         builder.Services.AddGates(builder.Configuration);
         return builder.Build();
+    }
+
+    private static string CliVersion()
+    {
+        var version = typeof(Application).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        return version ?? string.Empty;
+    }
+
+    private static float? Temperature(string value)
+    {
+        if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return float.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
     }
 }

@@ -27,6 +27,9 @@ public sealed record SettingsOverlay
     /// <summary>Gets the Checkov policy name.</summary>
     public string? Security { get; init; }
 
+    /// <summary>Gets the raw temperature text.</summary>
+    public string? Temperature { get; init; }
+
     /// <summary>Gets whether interactive questions are skipped.</summary>
     public bool? AutoApprove { get; init; }
 

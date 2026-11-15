@@ -79,6 +79,30 @@ public sealed class AgentsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task Developer_Temperature_ReachesTheChatClient()
+    {
+        var client = new ScriptedChatClient("""{"files":[{"path":"main.tf","content":"ok\n"}]}""");
+        using var provider = CreateProvider(client, temperature: 0.5f);
+        var developer = Profile(provider, "trio").Agents.Single(agent => agent.Role == AgentRole.Developer);
+
+        await developer.RunAsync(new AgentContext("hello", true), CancellationToken.None);
+
+        Assert.Equal(0.5f, client.LastOptions?.Temperature);
+    }
+
+    [Fact]
+    public async Task Developer_TemperatureNone_SendsNull()
+    {
+        var client = new ScriptedChatClient("""{"files":[{"path":"main.tf","content":"ok\n"}]}""");
+        using var provider = CreateProvider(client);
+        var developer = Profile(provider, "trio").Agents.Single(agent => agent.Role == AgentRole.Developer);
+
+        await developer.RunAsync(new AgentContext("hello", true), CancellationToken.None);
+
+        Assert.Null(client.LastOptions?.Temperature);
+    }
+
+    [Fact]
     public async Task Orchestrator_AutoApprove_DoesNotAsk()
     {
         var interaction = new RecordingInteraction();
@@ -140,16 +164,16 @@ public sealed class AgentsServiceCollectionExtensionsTests
         return provider.GetServices<IProfileDefinition>().Single(definition => definition.Name == name).Build(provider);
     }
 
-    private static ServiceProvider CreateProvider(IChatClient client, IUserInteraction? interaction = null)
+    private static ServiceProvider CreateProvider(IChatClient client, IUserInteraction? interaction = null, float? temperature = null)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IModelRouter>(new FixedRouter(client));
+        services.AddSingleton<IModelRouter>(new FixedRouter(client, temperature));
         services.AddSingleton(interaction ?? new RecordingInteraction());
         services.AddAgents(new ConfigurationBuilder().Build());
         return services.BuildServiceProvider();
     }
 
-    private sealed class FixedRouter(IChatClient client) : IModelRouter
+    private sealed class FixedRouter(IChatClient client, float? temperature = null) : IModelRouter
     {
         public IChatClient GetClient(ModelTier tier)
         {
@@ -159,6 +183,11 @@ public sealed class AgentsServiceCollectionExtensionsTests
         public string GetModelId(ModelTier tier)
         {
             return "test-model";
+        }
+
+        public ChatOptions CreateChatOptions()
+        {
+            return new ChatOptions { Temperature = temperature };
         }
     }
 
@@ -196,9 +225,12 @@ public sealed class AgentsServiceCollectionExtensionsTests
 
         public string? LastUser { get; private set; }
 
+        public ChatOptions? LastOptions { get; private set; }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             LastUser = messages.Last().Text;
+            LastOptions = options;
             var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, _responses.Dequeue()))
             {
                 Usage = new UsageDetails { InputTokenCount = 2, OutputTokenCount = 3 },

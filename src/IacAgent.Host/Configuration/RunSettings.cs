@@ -27,6 +27,12 @@ public sealed record RunSettings
     /// <summary>Gets the Checkov policy. <c>baseline</c> or <c>strict</c>.</summary>
     public string Security { get; init; } = "baseline";
 
+    /// <summary>Gets the CLI informational version recorded in run.json.</summary>
+    public string ToolVersion { get; init; } = "";
+
+    /// <summary>Gets the temperature text: a number from 0 to 2, or <c>none</c>.</summary>
+    public string Temperature { get; init; } = "0.2";
+
     /// <summary>Gets whether interactive questions are skipped.</summary>
     public bool AutoApprove { get; init; }
 

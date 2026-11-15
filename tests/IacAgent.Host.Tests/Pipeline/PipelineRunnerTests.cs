@@ -272,7 +272,7 @@ public sealed class PipelineRunnerTests
     {
         var services = new ServiceCollection().BuildServiceProvider();
         var catalog = new ProfileCatalog([new FakeProfile("trio", agent)]);
-        return new PipelineRunner(catalog, gates ?? [], services, NullLogger<PipelineRunner>.Instance, new IdleRouter(), rules ?? []);
+        return new PipelineRunner(catalog, gates ?? [], services, NullLogger<PipelineRunner>.Instance, new IdleRouter(), rules ?? [], new QuietProcessRunner());
     }
 
     private static GenerateRequest Request(string directory, string? endpoint)
@@ -312,6 +312,11 @@ public sealed class PipelineRunnerTests
         public string GetModelId(ModelTier tier)
         {
             return "test-model";
+        }
+
+        public Microsoft.Extensions.AI.ChatOptions CreateChatOptions()
+        {
+            return new Microsoft.Extensions.AI.ChatOptions();
         }
     }
 

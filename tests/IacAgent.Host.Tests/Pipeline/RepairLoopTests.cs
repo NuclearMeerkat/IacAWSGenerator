@@ -99,6 +99,7 @@ public sealed class RepairLoopTests
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddSingleton<IModelRouter>(new IdleRouter());
+            services.AddSingleton<IProcessRunner, QuietProcessRunner>();
             services.AddHost(new ConfigurationBuilder().Build());
             services.AddSingleton<IProfileDefinition>(new HostedProfile());
             services.AddSingleton<IGate, PassingGate>();
@@ -372,7 +373,7 @@ public sealed class RepairLoopTests
 
         var services = new ServiceCollection().BuildServiceProvider();
         var catalog = new ProfileCatalog([new ScriptedProfile(agents, profileRepairs, maxTokens)]);
-        return new PipelineRunner(catalog, [gate], services, NullLogger<PipelineRunner>.Instance, router ?? new IdleRouter(), rules ?? []);
+        return new PipelineRunner(catalog, [gate], services, NullLogger<PipelineRunner>.Instance, router ?? new IdleRouter(), rules ?? [], new QuietProcessRunner());
     }
 
     private static GenerateRequest Request(string directory, string profile = "scripted", int? maxRepairs = 3, int? maxTokens = null)
@@ -400,6 +401,11 @@ public sealed class RepairLoopTests
         public string GetModelId(ModelTier tier)
         {
             return "test-model";
+        }
+
+        public Microsoft.Extensions.AI.ChatOptions CreateChatOptions()
+        {
+            return new Microsoft.Extensions.AI.ChatOptions();
         }
     }
 

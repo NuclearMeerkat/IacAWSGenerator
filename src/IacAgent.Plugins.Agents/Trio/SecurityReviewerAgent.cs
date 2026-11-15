@@ -35,7 +35,7 @@ internal sealed class SecurityReviewerAgent(IModelRouter router, IEnumerable<IRe
         }
 
         var client = router.GetClient(ModelTier.Cheap);
-        var (text, tokens) = await ChatText.CompleteAsync(client, _prompt, builder.ToString(), rules, cancellationToken).ConfigureAwait(false);
+        var (text, tokens) = await ChatText.CompleteAsync(client, _prompt, builder.ToString(), rules, router.CreateChatOptions(), cancellationToken).ConfigureAwait(false);
         return new AgentResult([], Review: text, Tokens: tokens);
     }
 }

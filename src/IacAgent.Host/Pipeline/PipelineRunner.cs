@@ -1,5 +1,6 @@
 using IacAgent.Core;
 using IacAgent.Host.Configuration;
+using IacAgent.Host.Doctor;
 using IacAgent.Host.Recording;
 
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,7 @@ public sealed class PipelineRunner
     private readonly ILogger<PipelineRunner> _logger;
     private readonly IModelRouter _router;
     private readonly IReadOnlyList<IRedactionRule> _rules;
+    private readonly IProcessRunner _processRunner;
 
     /// <summary>Creates a runner from the registered profiles and gates.</summary>
     public PipelineRunner(
@@ -23,7 +25,8 @@ public sealed class PipelineRunner
         IServiceProvider services,
         ILogger<PipelineRunner> logger,
         IModelRouter router,
-        IEnumerable<IRedactionRule> rules)
+        IEnumerable<IRedactionRule> rules,
+        IProcessRunner processRunner)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(gates);
@@ -31,12 +34,14 @@ public sealed class PipelineRunner
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(router);
         ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(processRunner);
         _catalog = catalog;
         _gates = gates.OrderBy(gate => gate.Order).ToList();
         _services = services;
         _logger = logger;
         _router = router;
         _rules = rules.ToList();
+        _processRunner = processRunner;
     }
 
     /// <summary>Runs one generate request.</summary>
@@ -77,6 +82,7 @@ public sealed class PipelineRunner
         CancellationToken cancellationToken)
     {
         var profile = _catalog.Create(request.Profile, _services);
+        await RecordToolVersionsAsync(recorder, cancellationToken).ConfigureAwait(false);
         if (profile is null)
         {
             _logger.LogWarning("Profile {Profile} is not registered.", request.Profile);
@@ -125,6 +131,13 @@ public sealed class PipelineRunner
         await recorder.WriteAsync(workspace, repair.Outcome, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Run finished with {Outcome}.", repair.Outcome);
         return new PipelineResult(repair.Outcome, outputDirectory);
+    }
+
+    private async Task RecordToolVersionsAsync(RunRecorder recorder, CancellationToken cancellationToken)
+    {
+        var terraform = await ToolVersionReader.ReadAsync(_processRunner, "terraform", ["version"], cancellationToken).ConfigureAwait(false);
+        var checkov = await ToolVersionReader.ReadAsync(_processRunner, "checkov", ["--version"], cancellationToken).ConfigureAwait(false);
+        recorder.SetTools(terraform.Ok ? terraform.Detail : string.Empty, checkov.Ok ? checkov.Detail : string.Empty);
     }
 
     private async Task WriteFailureAsync(
@@ -256,6 +269,6 @@ public sealed class PipelineRunner
             return current;
         }
 
-        return new TokenCount(current.Input + addition.Input, current.Output + addition.Output);
+        return addition is null ? current : current.Plus(addition);
     }
 }
