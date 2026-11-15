@@ -44,7 +44,7 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
 | tokens | Sum of iteration tokens. Phase 1 writes zeros because it does not call a model. |
 | iterations | One entry per agent-and-gate pass. `issueCount` is every finding. `blockingCount` is the findings that can fail the gate. `blockingIssues` and `advisoryIssues` are the totals for that pass. |
 | files | Relative paths written by this run. The next run into the same output directory deletes only these paths. |
-| resources | Top-level `resource` blocks in the final `.tf` files. Commented-out blocks and `data` blocks are not counted. |
+| resources | Top-level `resource` and `module` blocks in the final `.tf` files. Commented-out blocks and `data` blocks are not counted. A `module` block counts as the type `module`. |
 | assumptions | Notes collected from agents. |
 | outcome | `Succeeded`, `GateFailed`, `BudgetExceeded`, `NeedsHuman`, `ConfigError`, `Error`, or `Cancelled`. `BudgetExceeded` means the Infracost estimate is above `--budget`. A token limit stops as `GateFailed` unless every remaining issue is that budget rule. `Error` and `Cancelled` are written when the run throws or the caller cancels, and the exception still propagates. The readable explanation of a gate stop is in `escalation.md`. |
 | costUsd | USD for the run. A provider `cost` count wins when the chat client supplies one. Otherwise each call is priced from the `pricing` table in `iacagent.json` for that model id. Omitted when the provider sends no cost and the model has no price. |

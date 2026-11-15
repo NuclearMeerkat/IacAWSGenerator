@@ -34,16 +34,12 @@ internal sealed class SecurityReviewerAgent(IModelRouter router, IEnumerable<IRe
             builder.Append(issue.File).Append(':').Append(issue.Line).Append(' ').Append(issue.RuleId).Append(": ").AppendLine(issue.Message);
         }
 
-        var client = router.GetClient(ModelTier.Cheap);
         var (text, tokens) = await ChatText.CompleteAsync(
-            client,
+            ChatCall.For(router, ModelTier.Cheap),
             _prompt,
             builder.ToString(),
             rules,
-            router.CreateChatOptions(),
-            cancellationToken,
-            router,
-            router.GetModelId(ModelTier.Cheap)).ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false);
         return new AgentResult([], Review: text, Tokens: tokens);
     }
 }

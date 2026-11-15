@@ -33,11 +33,12 @@ public sealed class RunRecorder : IRunRecorder
     private string? _error;
 
     /// <summary>Starts timing a run.</summary>
-    public RunRecorder(GenerateRequest request, IEnumerable<IRedactionRule>? rules = null, string? strongModel = null, string? cheapModel = null, string security = "baseline")
+    public RunRecorder(GenerateRequest request, IEnumerable<IRedactionRule> rules, string strongModel, string cheapModel, string security)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(rules);
         _request = request;
-        _rules = rules?.ToList() ?? [];
+        _rules = rules.ToList();
         _strongModel = strongModel;
         _cheapModel = cheapModel;
         _security = string.IsNullOrWhiteSpace(security) ? "baseline" : security;

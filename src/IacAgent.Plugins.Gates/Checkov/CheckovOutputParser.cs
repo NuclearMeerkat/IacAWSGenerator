@@ -61,7 +61,7 @@ internal static class CheckovOutputParser
                 line = parsedLine;
             }
 
-            issues.Add(new GateIssue(file, line, ruleId, severity, message));
+            issues.Add(new GateIssue(file, line, ruleId, severity, message, IsSuppressed: suppressed));
         }
     }
 

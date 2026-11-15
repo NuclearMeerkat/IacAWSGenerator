@@ -18,13 +18,10 @@ internal sealed class SoloDeveloperAgent(IModelRouter router, IEnumerable<IRedac
     {
         ArgumentNullException.ThrowIfNull(context);
         return TerraformReply.WriteAsync(
-            router.GetClient(ModelTier.Strong),
+            ChatCall.For(router, ModelTier.Strong),
             _prompt,
             TerraformReply.UserMessage(context),
             rules,
-            router.CreateChatOptions(),
-            cancellationToken,
-            router,
-            router.GetModelId(ModelTier.Strong));
+            cancellationToken);
     }
 }

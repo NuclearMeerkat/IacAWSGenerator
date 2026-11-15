@@ -165,12 +165,21 @@ public static class Application
             return ExitCodes.ConfigError;
         }
 
+        if (!TryCompose(new SettingsOverlay { Endpoint = endpoint }, out var settings, out var error))
+        {
+            Console.Error.WriteLine(error);
+            return ExitCodes.ConfigError;
+        }
+
         try
         {
             var root = await BenchmarkCommand.RunAsync(
                 await File.ReadAllTextAsync(suitePath, cancellationToken).ConfigureAwait(false),
                 resume,
-                endpoint,
+                settings.Endpoint,
+                settings.MaxRepairIterations,
+                settings.MaxTotalTokens,
+                settings.Verbose,
                 CliVersion(),
                 RunBenchCaseAsync,
                 cancellationToken).ConfigureAwait(false);

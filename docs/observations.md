@@ -10,7 +10,7 @@ The developer prompt now says to add only the resources the prompt names, and th
 
 The OpenAI .NET client 2.14 retries HTTP 408, 429, 500, 502, 503, and 504 up to three extra times with exponential backoff, so IacAgent adds no retry of its own. OllamaSharp talks to a local server and needs none.
 
-The OpenAI .NET client 2.14 maps chat usage to token counts only. `ChatTokenUsage` has no cost, and `UsageDetails.AdditionalCounts` is not filled with OpenRouter's `usage.cost`. Those counts are whole numbers, so a fractional dollar amount cannot be stored there. `costUsd` uses a provider `cost` count when one is present. Otherwise `iacagent.json` `pricing` supplies USD per one million input and output tokens for the model id. The field is omitted when neither is available.
+The OpenAI .NET client 2.14 maps chat usage to token counts only. `ChatTokenUsage` has no cost, and `UsageDetails.AdditionalCounts` is not filled with OpenRouter's `usage.cost`. Those counts are whole numbers, so a fractional dollar amount cannot be stored there. `costUsd` uses a provider `cost` count when one is present. Otherwise `iacagent.json` `pricing` supplies USD per one million input and output tokens for the model id. The field is omitted when neither is available. The committed table uses the OpenRouter headline for DeepSeek V4.1 Flash on 15 Nov 2026, $0.0507 input and $0.2028 output per million, under the model id the suite runs. A cached-token discount is not applied.
 
 Formatting is a deterministic normalization: `terraform fmt` rewrites the files, and the gate still decides. A syntax error remains a blocking issue. A formatting difference does not spend a repair.
 

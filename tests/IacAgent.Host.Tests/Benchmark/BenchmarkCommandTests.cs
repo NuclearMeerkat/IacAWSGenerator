@@ -31,7 +31,7 @@ public sealed class BenchmarkCommandTests
         {
             var agent = new FileAgent();
             var requests = new List<GenerateRequest>();
-            var root = await BenchmarkCommand.RunAsync(Suite, null, null, "test", (request, budget, token) =>
+            var root = await BenchmarkCommand.RunAsync(Suite, null, null, null, null, false, "test", (request, budget, token) =>
             {
                 requests.Add(request);
                 Assert.Equal(10m, budget);
@@ -58,12 +58,12 @@ public sealed class BenchmarkCommandTests
         var agent = new FileAgent();
         try
         {
-            var root = await BenchmarkCommand.RunAsync(Suite, null, null, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
+            var root = await BenchmarkCommand.RunAsync(Suite, null, null, null, null, false, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
             var repeatTwo = Directory.GetDirectories(root, "2", SearchOption.AllDirectories).Single();
             Directory.Delete(repeatTwo, true);
             var calls = agent.Calls;
 
-            await BenchmarkCommand.RunAsync(Suite, root, null, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
+            await BenchmarkCommand.RunAsync(Suite, root, null, null, null, false, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
 
             Assert.Equal(calls + 1, agent.Calls);
             Assert.Equal(3, ReadCsv(root).Length);
@@ -80,7 +80,7 @@ public sealed class BenchmarkCommandTests
         var agent = new ThrowingThenFileAgent();
         try
         {
-            var root = await BenchmarkCommand.RunAsync(Suite, null, null, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
+            var root = await BenchmarkCommand.RunAsync(Suite, null, null, null, null, false, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
             var lines = ReadCsv(root);
 
             Assert.Equal("Error", Field(lines[1], 7));

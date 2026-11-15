@@ -36,7 +36,7 @@ internal sealed class CheckovGate(IProcessRunner processRunner, CheckovOptions o
             var policy = new CheckovPolicy(options);
             var issues = CheckovOutputParser.Parse(result.StandardOutput)
                 .Select(issue => issue with { IsBlocking = policy.IsBlocking(issue.RuleId) })
-                .Where(issue => issue.IsBlocking || !IsSuppression(issue.Message))
+                .Where(issue => issue.IsBlocking || !issue.IsSuppressed)
                 .ToList();
             var passed = issues.All(issue => !issue.IsBlocking);
             return new GateResult(Name, passed, issues);
@@ -47,8 +47,4 @@ internal sealed class CheckovGate(IProcessRunner processRunner, CheckovOptions o
         }
     }
 
-    private static bool IsSuppression(string message)
-    {
-        return message.StartsWith("Suppressed with checkov:skip", StringComparison.Ordinal);
-    }
 }

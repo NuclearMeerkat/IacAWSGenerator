@@ -1,0 +1,8 @@
+{
+  "pricing": {
+    "deepseek/deepseek-v4.1-flash-1017": {
+      "inputPerMillion": 0.0507,
+      "outputPerMillion": 0.2028
+    }
+  }
+}

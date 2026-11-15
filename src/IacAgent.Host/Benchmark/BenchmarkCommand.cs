@@ -14,6 +14,9 @@ public static class BenchmarkCommand
         string suiteJson,
         string? resumeDirectory,
         string? endpoint,
+        int? maxRepairIterations,
+        int? maxTotalTokens,
+        bool verbose,
         string toolVersion,
         Func<GenerateRequest, decimal?, CancellationToken, Task> run,
         CancellationToken cancellationToken)
@@ -24,13 +27,14 @@ public static class BenchmarkCommand
         var root = ResolveRoot(suite.Name, resumeDirectory);
         Directory.CreateDirectory(root);
         var rows = new List<IReadOnlyList<string>>();
-        foreach (var combination in Combinations(suite, root, endpoint, toolVersion))
+        var csvPath = Path.Combine(root, "results.csv");
+        foreach (var combination in Combinations(suite, root, endpoint, maxRepairIterations, maxTotalTokens, verbose, toolVersion))
         {
             cancellationToken.ThrowIfCancellationRequested();
             rows.Add(await RunCombinationAsync(combination, run, cancellationToken).ConfigureAwait(false));
+            await File.WriteAllTextAsync(csvPath, BenchmarkCsv.Format(rows), cancellationToken).ConfigureAwait(false);
         }
 
-        await File.WriteAllTextAsync(Path.Combine(root, "results.csv"), BenchmarkCsv.Format(rows), cancellationToken).ConfigureAwait(false);
         return root;
     }
 
@@ -50,7 +54,14 @@ public static class BenchmarkCommand
         return Path.GetFullPath(resumeDirectory);
     }
 
-    private static IEnumerable<Combination> Combinations(BenchmarkSuite suite, string root, string? endpoint, string toolVersion)
+    private static IEnumerable<Combination> Combinations(
+        BenchmarkSuite suite,
+        string root,
+        string? endpoint,
+        int? maxRepairIterations,
+        int? maxTotalTokens,
+        bool verbose,
+        string toolVersion)
     {
         foreach (var task in suite.Tasks)
         {
@@ -64,7 +75,7 @@ public static class BenchmarkCommand
                         {
                             for (var repeat = 1; repeat <= suite.Repeat; repeat++)
                             {
-                                yield return new Combination(task, profile, model, temperature, security, repeat, root, endpoint, toolVersion);
+                                yield return new Combination(task, profile, model, temperature, security, repeat, root, endpoint, maxRepairIterations, maxTotalTokens, verbose, toolVersion);
                             }
                         }
                     }
@@ -136,6 +147,9 @@ public static class BenchmarkCommand
         int Repeat,
         string Root,
         string? Endpoint,
+        int? MaxRepairIterations,
+        int? MaxTotalTokens,
+        bool Verbose,
         string ToolVersion)
     {
         public string Directory => Path.Combine(Root, Task.Id, Profile, ModelFolder(), Temperature, Security, Repeat.ToString(CultureInfo.InvariantCulture));
@@ -149,10 +163,10 @@ public static class BenchmarkCommand
                 Model.Strong,
                 Model.Cheap,
                 Endpoint,
-                null,
-                null,
+                MaxRepairIterations,
+                MaxTotalTokens,
                 true,
-                false,
+                Verbose,
                 Security,
                 ToolVersion,
                 Temperature);

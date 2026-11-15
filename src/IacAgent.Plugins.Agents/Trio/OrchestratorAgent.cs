@@ -19,15 +19,13 @@ internal sealed class OrchestratorAgent(IModelRouter router, IEnumerable<IRedact
     public async Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var client = router.GetClient(ModelTier.Strong);
-        var modelId = router.GetModelId(ModelTier.Strong);
+        var call = ChatCall.For(router, ModelTier.Strong);
         var user = $"Auto-approve: {context.AutoApprove}\n\n{context.Prompt}";
-        var options = router.CreateChatOptions();
-        var (text, tokens) = await ChatText.CompleteAsync(client, _prompt, user, rules, options, cancellationToken, router, modelId).ConfigureAwait(false);
+        var (text, tokens) = await ChatText.CompleteAsync(call, _prompt, user, rules, cancellationToken).ConfigureAwait(false);
         var document = ChatText.ParseObject(text);
         if (document is null)
         {
-            (text, var retryTokens) = await ChatText.CompleteAsync(client, _prompt, "Reply with only the JSON object.\n\n" + text, rules, options, cancellationToken, router, modelId).ConfigureAwait(false);
+            (text, var retryTokens) = await ChatText.CompleteAsync(call, _prompt, "Reply with only the JSON object.\n\n" + text, rules, cancellationToken).ConfigureAwait(false);
             tokens = tokens.Plus(retryTokens);
             document = ChatText.ParseObject(text);
         }

@@ -22,7 +22,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         CancellationToken cancellationToken)
     {
         var developers = profile.Agents.Where(agent => agent.Role == AgentRole.Developer).ToList();
-        var state = new RepairState([], [], null, 0, openingTokens, []);
+        var state = new RepairState([], [], null, 0, openingTokens, [], []);
         while (true)
         {
             var turn = await AskDeveloperAsync(developers, request, outputDirectory, requirements, designNotes, assumptions, state, cancellationToken).ConfigureAwait(false);
@@ -95,13 +95,15 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
     {
         if (turn.FailedWithoutFiles && state.Repairs > 0)
         {
-            var kept = state.LastResults.Append(DeveloperFailure(turn.FailureMessage)).ToList();
-            return state with { Files = turn.Files, LastResults = kept, Tokens = turn.TotalTokens, GateDurations = [] };
+            var failure = DeveloperFailure(turn.FailureMessage);
+            var kept = state.LastResults.Where(result => result.GateName != "developer").Append(failure).ToList();
+            return state with { Files = turn.Files, LastResults = kept, IterationResults = [failure], Tokens = turn.TotalTokens, GateDurations = [] };
         }
 
         if (turn.FailedWithoutFiles)
         {
-            return state with { Files = turn.Files, LastResults = [DeveloperFailure(turn.FailureMessage)], Tokens = turn.TotalTokens, GateDurations = [] };
+            var failure = DeveloperFailure(turn.FailureMessage);
+            return state with { Files = turn.Files, LastResults = [failure], IterationResults = [failure], Tokens = turn.TotalTokens, GateDurations = [] };
         }
 
         if (turn.Files.Count > 0)
@@ -111,10 +113,12 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
 
         var measured = await RunGatesAsync(new Artifact(outputDirectory, turn.Files), cancellationToken).ConfigureAwait(false);
         var files = Reload(outputDirectory, turn.Files);
+        var results = measured.Select(pass => pass.Result).ToList();
         return state with
         {
             Files = files,
-            LastResults = measured.Select(pass => pass.Result).ToList(),
+            LastResults = results,
+            IterationResults = results,
             Tokens = turn.TotalTokens,
             GateDurations = measured.Select(pass => pass.DurationMs).ToList(),
         };
@@ -141,7 +145,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
     private static void RecordIteration(RunRecorder recorder, RepairState state, TokenCount iterationTokens, TokenCount openingTokens)
     {
         var tokens = state.Repairs == 0 ? Add(openingTokens, iterationTokens) : iterationTokens;
-        var gates = state.LastResults.Select((result, index) => new GateSummary(
+        var gates = state.IterationResults.Select((result, index) => new GateSummary(
             result.GateName,
             result.Passed,
             result.Issues.Count,
@@ -263,7 +267,8 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         string? PreviousSignature,
         int Repairs,
         TokenCount Tokens,
-        IReadOnlyList<long> GateDurations);
+        IReadOnlyList<long> GateDurations,
+        IReadOnlyList<GateResult> IterationResults);
 
     private readonly record struct GatePass(GateResult Result, long DurationMs);
 

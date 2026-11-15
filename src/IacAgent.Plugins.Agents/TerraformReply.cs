@@ -73,30 +73,24 @@ internal static class TerraformReply
     }
 
     public static async Task<AgentResult> WriteAsync(
-        IChatClient client,
+        ChatCall call,
         string systemPrompt,
         string userPrompt,
         IEnumerable<IRedactionRule> rules,
-        ChatOptions? options,
-        CancellationToken cancellationToken,
-        IModelRouter router,
-        string modelId)
+        CancellationToken cancellationToken)
     {
-        var (text, tokens) = await ChatText.CompleteAsync(client, systemPrompt, userPrompt, rules, options, cancellationToken, router, modelId).ConfigureAwait(false);
+        var (text, tokens) = await ChatText.CompleteAsync(call, systemPrompt, userPrompt, rules, cancellationToken).ConfigureAwait(false);
         if (TryRead(text, out var files, out var assumptions))
         {
             return new AgentResult(assumptions, Files: files, Tokens: tokens);
         }
 
         var (repaired, retryTokens) = await ChatText.CompleteAsync(
-            client,
+            call,
             systemPrompt,
             "Reply with only the JSON object {\"files\":[{\"path\":\"main.tf\",\"content\":\"...\"}]}.\n\n" + text,
             rules,
-            options,
-            cancellationToken,
-            router,
-            modelId).ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false);
         tokens = tokens.Plus(retryTokens);
         if (TryRead(repaired, out files, out assumptions))
         {

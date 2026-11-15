@@ -45,4 +45,26 @@ public sealed class TerraformResourceInventoryTests
         Assert.Equal("variables.tf: aws_s3_bucket.data, aws_iam_role.reader", TerraformResourceInventory.Describe(file));
         Assert.Equal("lambda.py", TerraformResourceInventory.Describe(new GeneratedFile("lambda.py", "resource \"aws_s3_bucket\" \"ignored\" {}")));
     }
+
+    [Fact]
+    public void Count_IncludesModuleBlocks()
+    {
+        var files = new[]
+        {
+            new GeneratedFile("main.tf", """
+                module "vpc" {
+                  source = "terraform-aws-modules/vpc/aws"
+                }
+                # module "commented" {}
+                resource "aws_s3_bucket" "logs" {}
+                """),
+        };
+
+        var inventory = TerraformResourceInventory.Count(files);
+
+        Assert.Equal(2, inventory.Count);
+        Assert.Equal(1, inventory.Types["module"]);
+        Assert.Equal(1, inventory.Types["aws_s3_bucket"]);
+        Assert.Contains("module.vpc", TerraformResourceInventory.Describe(files[0]), StringComparison.Ordinal);
+    }
 }

@@ -2,7 +2,7 @@
   "name": "hello-suite",
   "repeat": 1,
   "profiles": ["solo", "trio", "full"],
-  "models": [{ "strong": "strong-model", "cheap": "cheap-model" }],
+  "models": [{ "strong": "deepseek/deepseek-v4.1-flash-1017", "cheap": "deepseek/deepseek-v4.1-flash-1017" }],
   "temperatures": [0, 0.5, 1.0],
   "security": ["baseline"],
   "tasks": [
@@ -12,8 +12,8 @@
       "budget": 10
     },
     {
-      "id": "s3-website",
-      "prompt": "An S3 bucket configured as a static website",
+      "id": "s3-versioned",
+      "prompt": "A private S3 bucket with versioning enabled",
       "budget": 5
     },
     {

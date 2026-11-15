@@ -51,26 +51,23 @@ public sealed class PipelineRunner
         var outputDirectory = Path.GetFullPath(request.OutputDirectory);
         var recorder = new RunRecorder(request, _rules, _router.GetModelId(ModelTier.Strong), _router.GetModelId(ModelTier.Cheap), request.Security);
         var workspace = RunWorkspace.Create(recorder.RunId);
+        Exception? thrown = null;
         try
         {
-            return await ExecuteAsync(request, workspace, outputDirectory, recorder, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            await WriteFailureAsync(workspace, recorder, exception, cancellationToken).ConfigureAwait(false);
-            throw;
+            try
+            {
+                return await ExecuteAsync(request, workspace, outputDirectory, recorder, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                thrown = exception;
+                await WriteFailureAsync(workspace, recorder, exception, cancellationToken).ConfigureAwait(false);
+                throw;
+            }
         }
         finally
         {
-            RunWorkspace.Publish(workspace, outputDirectory);
-            if (request.Verbose)
-            {
-                _logger.LogInformation("Workspace kept at {Workspace}.", workspace);
-            }
-            else
-            {
-                RunWorkspace.Delete(workspace);
-            }
+            PublishWorkspace(workspace, outputDirectory, request.Verbose, thrown);
         }
     }
 
@@ -253,7 +250,7 @@ public sealed class PipelineRunner
         {
             new("orchestrator", false, [new GateIssue(string.Empty, null, "orchestrator", "error", message)]),
         };
-        recorder.RecordIteration(new IterationRecord(1, [new GateSummary("orchestrator", false, 1)], opening.Tokens));
+        recorder.RecordIteration(new IterationRecord(1, [new GateSummary("orchestrator", false, 1, 1)], opening.Tokens));
         recorder.AddAssumptions(assumptions);
         await EscalationReport.WriteAsync(workspace, RunOutcome.GateFailed, results, [], _rules, cancellationToken).ConfigureAwait(false);
         await recorder.WriteAsync(workspace, RunOutcome.GateFailed, cancellationToken).ConfigureAwait(false);
@@ -263,13 +260,33 @@ public sealed class PipelineRunner
 
     private sealed record Opening(string? Requirements, TokenCount Tokens, bool NeedsHuman, bool Failed, string? FailureMessage);
 
+    private void PublishWorkspace(string workspace, string outputDirectory, bool verbose, Exception? thrown)
+    {
+        try
+        {
+            RunWorkspace.Publish(workspace, outputDirectory);
+            if (verbose)
+            {
+                _logger.LogInformation("Workspace kept at {Workspace}.", workspace);
+            }
+            else
+            {
+                RunWorkspace.Delete(workspace);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (thrown is null)
+            {
+                throw;
+            }
+
+            _logger.LogError(exception, "Could not copy the workspace to {Output}.", outputDirectory);
+        }
+    }
+
     private static TokenCount Add(TokenCount current, TokenCount? addition)
     {
-        if (addition is null)
-        {
-            return current;
-        }
-
         return addition is null ? current : current.Plus(addition);
     }
 }

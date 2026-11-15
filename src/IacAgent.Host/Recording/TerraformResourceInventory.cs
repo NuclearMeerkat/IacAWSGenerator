@@ -18,11 +18,9 @@ internal static partial class TerraformResourceInventory
                 continue;
             }
 
-            foreach (Match match in ResourceDeclaration().Matches(StripComments(file.Content)))
-            {
-                var type = match.Groups["type"].Value;
-                counts[type] = counts.TryGetValue(type, out var current) ? current + 1 : 1;
-            }
+            var source = StripComments(file.Content);
+            CountMatches(counts, ResourceDeclaration().Matches(source), "type");
+            CountMatches(counts, ModuleDeclaration().Matches(source), "module");
         }
 
         return new Result(counts.Values.Sum(), counts);
@@ -37,13 +35,28 @@ internal static partial class TerraformResourceInventory
             return file.RelativePath;
         }
 
+        var source = StripComments(file.Content);
         var names = new List<string>();
-        foreach (Match match in ResourceDeclaration().Matches(StripComments(file.Content)))
+        foreach (Match match in ResourceDeclaration().Matches(source))
         {
             names.Add(match.Groups["type"].Value + "." + match.Groups["name"].Value);
         }
 
+        foreach (Match match in ModuleDeclaration().Matches(source))
+        {
+            names.Add("module." + match.Groups["name"].Value);
+        }
+
         return names.Count == 0 ? file.RelativePath : file.RelativePath + ": " + string.Join(", ", names);
+    }
+
+    private static void CountMatches(SortedDictionary<string, int> counts, MatchCollection matches, string group)
+    {
+        foreach (Match match in matches)
+        {
+            var type = group == "module" ? "module" : match.Groups[group].Value;
+            counts[type] = counts.TryGetValue(type, out var current) ? current + 1 : 1;
+        }
     }
 
     private static string StripComments(string text)
@@ -80,6 +93,9 @@ internal static partial class TerraformResourceInventory
 
     [GeneratedRegex(@"\bresource\s+""(?<type>[A-Za-z0-9_]+)""\s+""(?<name>[A-Za-z0-9_]+)""", RegexOptions.CultureInvariant)]
     private static partial Regex ResourceDeclaration();
+
+    [GeneratedRegex(@"\bmodule\s+""(?<name>[A-Za-z0-9_]+)""", RegexOptions.CultureInvariant)]
+    private static partial Regex ModuleDeclaration();
 
     internal sealed record Result(int Count, IReadOnlyDictionary<string, int> Types);
 }

@@ -105,6 +105,24 @@ public sealed class CheckovGateTests
         Assert.False(result.Passed);
         var issue = Assert.Single(result.Issues);
         Assert.Equal("Suppressed with checkov:skip. Remove the suppression and fix the resource.", issue.Message);
+        Assert.True(issue.IsSuppressed);
+    }
+
+    [Fact]
+    public async Task CheckAsync_ConfiguredBlockingList_ReplacesTheDefault()
+    {
+        const string json = """
+            {"results":{"failed_checks":[{"check_id":"CKV_AWS_24","check_name":"open ssh","file_path":"/main.tf","file_line_range":[1,2]}]}}
+            """;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Checkov:BlockingChecks:0"] = "CKV_AWS_1",
+        }).Build();
+
+        var result = await RunAsync(json, configuration);
+
+        Assert.True(result.Passed);
+        Assert.False(Assert.Single(result.Issues).IsBlocking);
     }
 
     [Fact]

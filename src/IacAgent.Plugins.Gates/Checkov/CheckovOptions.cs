@@ -50,14 +50,27 @@ internal sealed class CheckovOptions
             options.Level = level;
         }
 
-        foreach (var child in configuration.GetSection("Checkov:StrictSkipChecks").GetChildren())
+        var blocking = ReadList(configuration, "Checkov:BlockingChecks");
+        if (blocking.Count > 0)
+        {
+            options.BlockingChecks = blocking;
+        }
+
+        options.StrictSkipChecks = ReadList(configuration, "Checkov:StrictSkipChecks");
+        return options;
+    }
+
+    private static List<string> ReadList(IConfiguration configuration, string section)
+    {
+        var values = new List<string>();
+        foreach (var child in configuration.GetSection(section).GetChildren())
         {
             if (!string.IsNullOrWhiteSpace(child.Value))
             {
-                options.StrictSkipChecks.Add(child.Value);
+                values.Add(child.Value);
             }
         }
 
-        return options;
+        return values;
     }
 }

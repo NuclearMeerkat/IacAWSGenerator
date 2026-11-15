@@ -6,17 +6,23 @@ using Microsoft.Extensions.AI;
 
 namespace IacAgent.Plugins.Agents;
 
+internal readonly record struct ChatCall(IChatClient Client, IModelRouter Router, string ModelId, ChatOptions? Options)
+{
+    public static ChatCall For(IModelRouter router, ModelTier tier)
+    {
+        ArgumentNullException.ThrowIfNull(router);
+        return new ChatCall(router.GetClient(tier), router, router.GetModelId(tier), router.CreateChatOptions());
+    }
+}
+
 internal static class ChatText
 {
     public static async Task<(string Text, TokenCount Tokens)> CompleteAsync(
-        IChatClient client,
+        ChatCall call,
         string systemPrompt,
         string userPrompt,
         IEnumerable<IRedactionRule> rules,
-        ChatOptions? options,
-        CancellationToken cancellationToken,
-        IModelRouter router,
-        string modelId)
+        CancellationToken cancellationToken)
     {
         var redacted = userPrompt;
         foreach (var rule in rules)
@@ -24,13 +30,13 @@ internal static class ChatText
             redacted = rule.Redact(redacted);
         }
 
-        var response = await client.GetResponseAsync(
+        var response = await call.Client.GetResponseAsync(
             [new ChatMessage(ChatRole.System, systemPrompt), new ChatMessage(ChatRole.User, redacted)],
-            options,
+            call.Options,
             cancellationToken).ConfigureAwait(false);
         var input = (int)(response.Usage?.InputTokenCount ?? 0);
         var output = (int)(response.Usage?.OutputTokenCount ?? 0);
-        var cost = ReadCost(response.Usage) ?? router.EstimateCostUsd(modelId, input, output);
+        var cost = ReadCost(response.Usage) ?? call.Router.EstimateCostUsd(call.ModelId, input, output);
         return (response.Text ?? string.Empty, new TokenCount(input, output, cost));
     }
 
