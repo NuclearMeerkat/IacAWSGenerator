@@ -93,6 +93,40 @@ public sealed class BenchmarkCommandTests
     }
 
     [Fact]
+    public async Task RunAsync_ExpectMet_RecordsTrue()
+    {
+        const string content = """
+            resource "aws_lambda_function" "hello" {}
+            resource "aws_apigatewayv2_api" "http" {}
+            """;
+        var fields = await IntentRow("intent-met", content, withExpect: true);
+
+        Assert.Equal("true", fields[^2]);
+        Assert.Equal(string.Empty, fields[^1]);
+    }
+
+    [Fact]
+    public async Task RunAsync_ExpectNotMet_RecordsTheMissingGroups()
+    {
+        const string content = """
+            resource "aws_s3_bucket" "logs" {}
+            """;
+        var fields = await IntentRow("intent-miss", content, withExpect: true);
+
+        Assert.Equal("false", fields[^2]);
+        Assert.Equal("aws_lambda_function|aws_apigatewayv2_api,aws_api_gateway_rest_api", fields[^1]);
+    }
+
+    [Fact]
+    public async Task RunAsync_NoExpect_LeavesIntentColumnsEmpty()
+    {
+        var fields = await IntentRow("intent-none", "ok\n", withExpect: false);
+
+        Assert.Equal(string.Empty, fields[^2]);
+        Assert.Equal(string.Empty, fields[^1]);
+    }
+
+    [Fact]
     public void Load_RepeatZero_Throws()
     {
         var error = Assert.Throws<InvalidOperationException>(() => BenchmarkSuite.Load("""{"name":"tiny","repeat":0}"""));
@@ -106,6 +140,85 @@ public sealed class BenchmarkCommandTests
         var code = await Application.RunAsync(["bench", "--suite", Path.Combine(Path.GetTempPath(), "missing-suite.json")]);
 
         Assert.Equal(ExitCodes.ConfigError, code);
+    }
+
+    private static async Task<string[]> IntentRow(string name, string content, bool withExpect)
+    {
+        var expect = withExpect
+            ? """, "expect": [["aws_lambda_function"], ["aws_apigatewayv2_api", "aws_api_gateway_rest_api"]]"""
+            : string.Empty;
+        var suite = $$"""
+            {
+              "name": "{{name}}",
+              "repeat": 1,
+              "profiles": ["solo"],
+              "models": [{ "strong": "m" }],
+              "temperatures": [0],
+              "security": ["baseline"],
+              "tasks": [{ "id": "hello", "prompt": "hello"{{expect}} }]
+            }
+            """;
+        try
+        {
+            var root = await BenchmarkCommand.RunAsync(
+                suite,
+                null,
+                null,
+                null,
+                null,
+                false,
+                "test",
+                (request, _, token) => Pipeline(new ContentAgent(content)).RunAsync(request, token),
+                CancellationToken.None);
+            var lines = ReadCsv(root);
+            Assert.EndsWith("intentMet,missingGroups", lines[0], StringComparison.Ordinal);
+            return CsvFields(lines[1]);
+        }
+        finally
+        {
+            DeleteBench();
+        }
+    }
+
+    private static string[] CsvFields(string line)
+    {
+        var fields = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var quoted = false;
+        for (var index = 0; index < line.Length; index++)
+        {
+            var character = line[index];
+            if (quoted)
+            {
+                if (character == '"')
+                {
+                    quoted = false;
+                }
+                else
+                {
+                    current.Append(character);
+                }
+
+                continue;
+            }
+
+            if (character == '"')
+            {
+                quoted = true;
+            }
+            else if (character == ',')
+            {
+                fields.Add(current.ToString());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(character);
+            }
+        }
+
+        fields.Add(current.ToString());
+        return fields.ToArray();
     }
 
     private static PipelineRunner Pipeline(IAgent agent)
@@ -147,6 +260,18 @@ public sealed class BenchmarkCommandTests
         public PipelineProfile Build(IServiceProvider services)
         {
             return new PipelineProfile(Name, [agent], new LoopPolicy());
+        }
+    }
+
+    private sealed class ContentAgent(string content) : IAgent
+    {
+        public string Name => "solo";
+
+        public AgentRole Role => AgentRole.Developer;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AgentResult([], Files: [new GeneratedFile("main.tf", content)]));
         }
     }
 

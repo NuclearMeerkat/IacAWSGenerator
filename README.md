@@ -68,6 +68,8 @@ dotnet run --project src/IacAgent.Cli -- bench --suite benchmarks/hello-suite.js
 
 `bench` runs every combination in the suite, one at a time, and writes `results.csv`. It exits `0` when the suite finishes, including when individual runs fail. `--resume <folder>` continues a suite and skips a combination that already has `run.json`. An invalid suite file exits `20`.
 
+A task may set `expect`: a list of groups of resource types. The final run meets it when every group contains at least one type that appears in `run.json` `resources.types`. `results.csv` then has `intentMet` (`true`, `false`, or empty when `expect` is omitted) and `missingGroups` (the failing groups, joined with `|`). This column does not change the gate outcome.
+
 Exit codes: `0` success, `10` gate failure, `11` budget exceeded, `12` needs a human, `20` configuration or a missing prerequisite, `1` unexpected error.
 
 ## Extending

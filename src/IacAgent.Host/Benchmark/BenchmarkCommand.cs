@@ -107,7 +107,7 @@ public static class BenchmarkCommand
             }
         }
 
-        return File.Exists(runJson) ? ReadRow(combination, runJson) : combination.Row("Error", 0, 0, 0, string.Empty, 0, 0, 0, 0);
+        return File.Exists(runJson) ? ReadRow(combination, runJson) : combination.Row("Error", 0, 0, 0, string.Empty, 0, 0, 0, 0, string.Empty, string.Empty);
     }
 
     private static IReadOnlyList<string> ReadRow(Combination combination, string runJson)
@@ -117,10 +117,11 @@ public static class BenchmarkCommand
             var document = JsonSerializer.Deserialize(File.ReadAllText(runJson), RunJsonContext.Default.RunDocument);
             if (document is null)
             {
-                return combination.Row("Error", 0, 0, 0, string.Empty, 0, 0, 0, 0);
+                return combination.Row("Error", 0, 0, 0, string.Empty, 0, 0, 0, 0, string.Empty, string.Empty);
             }
 
             var last = document.Iterations.Count == 0 ? null : document.Iterations[^1];
+            var (intentMet, missingGroups) = IntentColumns(combination.Task.Expect, document.Resources.Types);
             return combination.Row(
                 document.Outcome,
                 document.Iterations.Count,
@@ -130,12 +131,35 @@ public static class BenchmarkCommand
                 document.DurationMs,
                 document.Resources.Count,
                 last?.BlockingIssues ?? 0,
-                last?.AdvisoryIssues ?? 0);
+                last?.AdvisoryIssues ?? 0,
+                intentMet,
+                missingGroups);
         }
         catch (JsonException)
         {
-            return combination.Row("Error", 0, 0, 0, string.Empty, 0, 0, 0, 0);
+            return combination.Row("Error", 0, 0, 0, string.Empty, 0, 0, 0, 0, string.Empty, string.Empty);
         }
+    }
+
+    private static (string Met, string Missing) IntentColumns(
+        IReadOnlyList<IReadOnlyList<string>>? expect,
+        IReadOnlyDictionary<string, int> types)
+    {
+        if (expect is null || expect.Count == 0)
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        var missing = new List<string>();
+        foreach (var group in expect)
+        {
+            if (!group.Any(type => types.TryGetValue(type, out var count) && count > 0))
+            {
+                missing.Add(string.Join(',', group));
+            }
+        }
+
+        return (missing.Count == 0 ? "true" : "false", string.Join('|', missing));
     }
 
     private sealed record Combination(
@@ -181,7 +205,9 @@ public static class BenchmarkCommand
             long duration,
             int resources,
             int blocking,
-            int advisory)
+            int advisory,
+            string intentMet,
+            string missingGroups)
         {
             var cheap = string.IsNullOrWhiteSpace(Model.Cheap) ? Model.Strong : Model.Cheap;
             return
@@ -202,6 +228,8 @@ public static class BenchmarkCommand
                 resources.ToString(CultureInfo.InvariantCulture),
                 blocking.ToString(CultureInfo.InvariantCulture),
                 advisory.ToString(CultureInfo.InvariantCulture),
+                intentMet,
+                missingGroups,
             ];
         }
 

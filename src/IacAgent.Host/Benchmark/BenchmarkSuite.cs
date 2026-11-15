@@ -5,7 +5,7 @@ namespace IacAgent.Host.Benchmark;
 
 internal sealed record BenchmarkModel(string Strong, string? Cheap);
 
-internal sealed record BenchmarkTask(string Id, string Prompt, decimal? Budget);
+internal sealed record BenchmarkTask(string Id, string Prompt, decimal? Budget, IReadOnlyList<IReadOnlyList<string>>? Expect);
 
 internal sealed record BenchmarkSuite(
     string Name,
@@ -160,10 +160,53 @@ internal sealed record BenchmarkSuite(
                 budget = parsed;
             }
 
-            tasks.Add(new BenchmarkTask(id, prompt, budget));
+            tasks.Add(new BenchmarkTask(id, prompt, budget, ReadExpect(item, id)));
         }
 
         return tasks;
+    }
+
+    private static IReadOnlyList<IReadOnlyList<string>>? ReadExpect(JsonElement task, string id)
+    {
+        if (!task.TryGetProperty("expect", out var expect))
+        {
+            return null;
+        }
+
+        if (expect.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidOperationException($"Task '{id}' expect must be a list of groups.");
+        }
+
+        if (expect.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        var groups = new List<IReadOnlyList<string>>();
+        foreach (var group in expect.EnumerateArray())
+        {
+            if (group.ValueKind != JsonValueKind.Array || group.GetArrayLength() == 0)
+            {
+                throw new InvalidOperationException($"Task '{id}' has an empty expect group.");
+            }
+
+            var types = new List<string>();
+            foreach (var type in group.EnumerateArray())
+            {
+                var text = type.ValueKind == JsonValueKind.String ? type.GetString() : null;
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    throw new InvalidOperationException($"Task '{id}' has an empty resource type in expect.");
+                }
+
+                types.Add(text);
+            }
+
+            groups.Add(types);
+        }
+
+        return groups;
     }
 
     private static IReadOnlyList<string> ReadStrings(JsonElement root, string name, string error)

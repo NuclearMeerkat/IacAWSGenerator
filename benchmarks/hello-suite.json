@@ -9,27 +9,32 @@
     {
       "id": "hello-lambda",
       "prompt": "API Gateway with a Lambda function in Python that returns hello",
-      "budget": 10
+      "budget": 10,
+      "expect": [["aws_lambda_function"], ["aws_apigatewayv2_api", "aws_api_gateway_rest_api"]]
     },
     {
       "id": "s3-versioned",
       "prompt": "A private S3 bucket with versioning enabled",
-      "budget": 5
+      "budget": 5,
+      "expect": [["aws_s3_bucket"]]
     },
     {
       "id": "sqs-lambda",
       "prompt": "An SQS queue with a Lambda function that consumes its messages",
-      "budget": 10
+      "budget": 10,
+      "expect": [["aws_sqs_queue"], ["aws_lambda_function"], ["aws_lambda_event_source_mapping"]]
     },
     {
       "id": "dynamodb-lambda",
       "prompt": "A DynamoDB table and a Lambda function that reads it",
-      "budget": 10
+      "budget": 10,
+      "expect": [["aws_dynamodb_table"], ["aws_lambda_function"]]
     },
     {
       "id": "vpc-subnets",
       "prompt": "A VPC with one public subnet and one private subnet",
-      "budget": 20
+      "budget": 20,
+      "expect": [["aws_vpc"], ["aws_subnet"]]
     }
   ]
 }
