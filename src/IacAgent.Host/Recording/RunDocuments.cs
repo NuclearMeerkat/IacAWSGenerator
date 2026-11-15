@@ -27,6 +27,10 @@ internal sealed class RunIterationDocument
     public required IReadOnlyList<RunGateDocument> Gates { get; init; }
 
     public required RunTokensDocument Tokens { get; init; }
+
+    public int BlockingIssues { get; init; }
+
+    public int AdvisoryIssues { get; init; }
 }
 
 internal sealed class RunModelsDocument
@@ -36,6 +40,13 @@ internal sealed class RunModelsDocument
     public required string Cheap { get; init; }
 
     public required string Provider { get; init; }
+}
+
+internal sealed class RunResourcesDocument
+{
+    public int Count { get; init; }
+
+    public required IReadOnlyDictionary<string, int> Types { get; init; }
 }
 
 internal sealed class RunDocument
@@ -61,6 +72,8 @@ internal sealed class RunDocument
     public required IReadOnlyList<RunIterationDocument> Iterations { get; init; }
 
     public required IReadOnlyList<string> Files { get; init; }
+
+    public required RunResourcesDocument Resources { get; init; }
 
     public required IReadOnlyList<string> Assumptions { get; init; }
 

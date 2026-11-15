@@ -14,4 +14,7 @@
     <ProjectReference Include="..\IacAgent.Core\IacAgent.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="IacAgent.Host.Tests" />
+  </ItemGroup>
 </Project>

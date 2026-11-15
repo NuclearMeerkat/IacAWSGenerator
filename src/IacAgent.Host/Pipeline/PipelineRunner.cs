@@ -121,6 +121,7 @@ public sealed class PipelineRunner
             cancellationToken).ConfigureAwait(false);
         recorder.AddAssumptions(assumptions);
         recorder.SetFiles(repair.Files.Select(file => file.RelativePath));
+        recorder.SetResources(TerraformResourceInventory.Count(repair.Files));
         await recorder.WriteAsync(workspace, repair.Outcome, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Run finished with {Outcome}.", repair.Outcome);
         return new PipelineResult(repair.Outcome, outputDirectory);

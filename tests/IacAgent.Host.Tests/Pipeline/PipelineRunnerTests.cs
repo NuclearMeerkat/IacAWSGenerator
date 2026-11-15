@@ -205,6 +205,24 @@ public sealed class PipelineRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_RunJson_MatchesSnapshot()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var runner = CreateRunner(new ResourceAgent(), [new AdvisoryOnlyGate()]);
+            await runner.RunAsync(Request(directory, null), CancellationToken.None);
+            var json = await File.ReadAllTextAsync(Path.Combine(directory, "run.json"));
+
+            await VerifyJson(json).ScrubMembers("runId", "startedAtUtc", "durationMs");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_StaleFileInOutput_IsNotGated()
     {
         var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
@@ -319,6 +337,36 @@ public sealed class PipelineRunnerTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new AgentResult([]));
+        }
+    }
+
+    private sealed class ResourceAgent : IAgent
+    {
+        public string Name => "resources";
+
+        public AgentRole Role => AgentRole.Developer;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            const string content = """
+                resource "aws_s3_bucket" "logs" {}
+                # resource "aws_vpc" "commented" {}
+                data "aws_ami" "ubuntu" {}
+                resource "aws_lambda_function" "hello" {}
+                """;
+            return Task.FromResult(new AgentResult([], Files: [new GeneratedFile("main.tf", content)]));
+        }
+    }
+
+    private sealed class AdvisoryOnlyGate : IGate
+    {
+        public string Name => "checkov";
+
+        public int Order => 20;
+
+        public Task<GateResult> CheckAsync(Artifact artifact, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new GateResult(Name, true, [new GateIssue("main.tf", 1, "CKV2_AWS_5", "UNKNOWN", "unattached", false)]));
         }
     }
 

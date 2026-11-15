@@ -1,0 +1,48 @@
+﻿{
+  schemaVersion: 2,
+  runId: {Scrubbed},
+  startedAtUtc: {Scrubbed},
+  durationMs: {Scrubbed},
+  profile: trio,
+  prompt: hello,
+  security: baseline,
+  models: {
+    strong: test-model,
+    cheap: test-model,
+    provider: openrouter
+  },
+  tokens: {
+    input: 0,
+    output: 0
+  },
+  iterations: [
+    {
+      index: 1,
+      gates: [
+        {
+          name: checkov,
+          passed: true,
+          issueCount: 1,
+          blockingCount: 0
+        }
+      ],
+      tokens: {
+        input: 0,
+        output: 0
+      },
+      blockingIssues: 0,
+      advisoryIssues: 1
+    }
+  ],
+  files: [
+    main.tf
+  ],
+  resources: {
+    count: 2,
+    types: {
+      aws_lambda_function: 1,
+      aws_s3_bucket: 1
+    }
+  },
+  outcome: Succeeded
+}

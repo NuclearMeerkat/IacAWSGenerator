@@ -14,9 +14,10 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
   "models": { "strong": "id", "cheap": "id", "provider": "openrouter" },
   "tokens": { "input": 0, "output": 0 },
   "iterations": [
-    { "index": 1, "gates": [ { "name": "validate", "passed": true, "issueCount": 0, "blockingCount": 0 } ], "tokens": { "input": 0, "output": 0 } }
+    { "index": 1, "gates": [ { "name": "validate", "passed": true, "issueCount": 1, "blockingCount": 0 } ], "blockingIssues": 0, "advisoryIssues": 1, "tokens": { "input": 0, "output": 0 } }
   ],
   "files": [ "main.tf" ],
+  "resources": { "count": 1, "types": { "aws_s3_bucket": 1 } },
   "assumptions": [ "text" ],
   "outcome": "Succeeded",
   "error": null
@@ -36,8 +37,9 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
 | models.cheap | Cheap-tier model id that the run used. When the cheap id is unset, this is the strong model id. |
 | models.provider | `openrouter` when no endpoint is set. `local` when `--endpoint` or `IACAGENT_ENDPOINT` is set. |
 | tokens | Sum of iteration tokens. Phase 1 writes zeros because it does not call a model. |
-| iterations | One entry per agent-and-gate pass. `issueCount` is every finding. `blockingCount` is the findings that can fail the gate. |
+| iterations | One entry per agent-and-gate pass. `issueCount` is every finding. `blockingCount` is the findings that can fail the gate. `blockingIssues` and `advisoryIssues` are the totals for that pass. |
 | files | Relative paths written by this run. The next run into the same output directory deletes only these paths. |
+| resources | Top-level `resource` blocks in the final `.tf` files. Commented-out blocks and `data` blocks are not counted. |
 | assumptions | Notes collected from agents. |
 | outcome | `Succeeded`, `GateFailed`, `BudgetExceeded`, `NeedsHuman`, `ConfigError`, `Error`, or `Cancelled`. `BudgetExceeded` means the Infracost estimate is above `--budget`. A token limit stops as `GateFailed` unless every remaining issue is that budget rule. `Error` and `Cancelled` are written when the run throws or the caller cancels, and the exception still propagates. The readable explanation of a gate stop is in `escalation.md`. |
 | error | First line of the exception message when the outcome is `Error` or `Cancelled`. Omitted otherwise. Secrets are redacted. |

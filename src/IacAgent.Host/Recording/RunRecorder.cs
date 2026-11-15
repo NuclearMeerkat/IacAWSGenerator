@@ -24,6 +24,7 @@ public sealed class RunRecorder : IRunRecorder
     private readonly List<RunIterationDocument> _iterations = [];
     private readonly List<string> _assumptions = [];
     private List<string> _files = [];
+    private TerraformResourceInventory.Result _resources = new(0, new Dictionary<string, int>());
     private int _inputTokens;
     private int _outputTokens;
     private string? _error;
@@ -70,6 +71,8 @@ public sealed class RunRecorder : IRunRecorder
                 Input = record.Tokens.Input,
                 Output = record.Tokens.Output,
             },
+            BlockingIssues = record.Gates.Sum(gate => gate.BlockingCount),
+            AdvisoryIssues = record.Gates.Sum(gate => gate.IssueCount - gate.BlockingCount),
         });
     }
 
@@ -106,6 +109,13 @@ public sealed class RunRecorder : IRunRecorder
     {
         ArgumentNullException.ThrowIfNull(files);
         _files = files.Select(file => file.Replace('\\', '/').TrimStart('/')).ToList();
+    }
+
+    /// <summary>Records the resource count for the final files.</summary>
+    internal void SetResources(TerraformResourceInventory.Result resources)
+    {
+        ArgumentNullException.ThrowIfNull(resources);
+        _resources = resources;
     }
 
     /// <summary>Stores the first line of a failure. Secrets are removed when the file is written.</summary>
@@ -150,6 +160,11 @@ public sealed class RunRecorder : IRunRecorder
             },
             Iterations = _iterations,
             Files = _files,
+            Resources = new RunResourcesDocument
+            {
+                Count = _resources.Count,
+                Types = _resources.Types.ToDictionary(pair => pair.Key, pair => pair.Value),
+            },
             Assumptions = _assumptions.Select(Redact).ToList(),
             Outcome = outcome.ToString(),
             Error = _error is null ? null : Redact(_error),
