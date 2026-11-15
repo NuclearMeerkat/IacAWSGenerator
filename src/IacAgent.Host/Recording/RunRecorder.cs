@@ -15,10 +15,14 @@ public sealed class RunRecorder : IRunRecorder
     private readonly string? _strongModel;
     private readonly string? _cheapModel;
     private readonly string _runId;
+
+    /// <summary>Gets the id used for run.json and the temporary workspace.</summary>
+    public string RunId => _runId;
     private readonly DateTime _startedAtUtc;
     private readonly Stopwatch _stopwatch;
     private readonly List<RunIterationDocument> _iterations = [];
     private readonly List<string> _assumptions = [];
+    private List<string> _files = [];
     private int _inputTokens;
     private int _outputTokens;
     private string? _error;
@@ -94,6 +98,13 @@ public sealed class RunRecorder : IRunRecorder
         };
     }
 
+    /// <summary>Records the relative paths this run wrote.</summary>
+    public void SetFiles(IEnumerable<string> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        _files = files.Select(file => file.Replace('\\', '/').TrimStart('/')).ToList();
+    }
+
     /// <summary>Stores the first line of a failure. Secrets are removed when the file is written.</summary>
     public void SetError(string? error)
     {
@@ -134,6 +145,7 @@ public sealed class RunRecorder : IRunRecorder
                 Output = _outputTokens,
             },
             Iterations = _iterations,
+            Files = _files,
             Assumptions = _assumptions.Select(Redact).ToList(),
             Outcome = outcome.ToString(),
             Error = _error is null ? null : Redact(_error),

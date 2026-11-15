@@ -204,6 +204,52 @@ public sealed class PipelineRunnerTests
         }
     }
 
+    [Fact]
+    public async Task RunAsync_StaleFileInOutput_IsNotGated()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory, "old.tf"), "stale");
+            var runner = CreateRunner(new MainFileAgent(), [new DirectoryNameGate()]);
+            var result = await runner.RunAsync(Request(directory, null), CancellationToken.None);
+            using var json = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "run.json")));
+            var runId = json.RootElement.GetProperty("runId").GetString() ?? string.Empty;
+
+            Assert.Equal(RunOutcome.Succeeded, result.Outcome);
+            Assert.True(File.Exists(Path.Combine(directory, "old.tf")));
+            Assert.False(Directory.Exists(Path.Combine(Path.GetTempPath(), "iacagent", runId)));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_UserFileOutsidePreviousList_Survives()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory, "run.json"), """{"files":["main.tf"]}""");
+            await File.WriteAllTextAsync(Path.Combine(directory, "notes.txt"), "keep");
+            await File.WriteAllTextAsync(Path.Combine(directory, "main.tf"), "old");
+            var runner = CreateRunner(new MainFileAgent());
+            await runner.RunAsync(Request(directory, null), CancellationToken.None);
+            using var json = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "run.json")));
+            var files = json.RootElement.GetProperty("files").EnumerateArray().Select(item => item.GetString() ?? string.Empty).ToArray();
+
+            Assert.Equal("keep", await File.ReadAllTextAsync(Path.Combine(directory, "notes.txt")));
+            Assert.Equal("fresh\n", await File.ReadAllTextAsync(Path.Combine(directory, "main.tf")));
+            Assert.Equal(["main.tf"], files);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static PipelineRunner CreateRunner(IAgent agent, IReadOnlyList<IGate>? gates = null, IEnumerable<IRedactionRule>? rules = null)
     {
         var services = new ServiceCollection().BuildServiceProvider();
@@ -273,6 +319,33 @@ public sealed class PipelineRunnerTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new AgentResult([]));
+        }
+    }
+
+    private sealed class MainFileAgent : IAgent
+    {
+        public string Name => "main-file";
+
+        public AgentRole Role => AgentRole.Developer;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AgentResult([], Files: [new GeneratedFile("main.tf", "fresh\n")]));
+        }
+    }
+
+    private sealed class DirectoryNameGate : IGate
+    {
+        public string Name => "directory";
+
+        public int Order => 1;
+
+        public Task<GateResult> CheckAsync(Artifact artifact, CancellationToken cancellationToken)
+        {
+            var names = Directory.GetFiles(artifact.Directory, "*.tf").Select(Path.GetFileName).ToArray();
+            var failed = names.Contains("old.tf", StringComparer.OrdinalIgnoreCase);
+            IReadOnlyList<GateIssue> issues = failed ? [new GateIssue("old.tf", 1, "stale", "HIGH", "old file was gated")] : [];
+            return Task.FromResult(new GateResult(Name, !failed, issues));
         }
     }
 

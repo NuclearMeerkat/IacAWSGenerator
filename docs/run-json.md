@@ -15,6 +15,7 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
   "iterations": [
     { "index": 1, "gates": [ { "name": "validate", "passed": true, "issueCount": 0 } ], "tokens": { "input": 0, "output": 0 } }
   ],
+  "files": [ "main.tf" ],
   "assumptions": [ "text" ],
   "outcome": "Succeeded",
   "error": null
@@ -34,6 +35,7 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
 | models.provider | `openrouter` when no endpoint is set. `local` when `--endpoint` or `IACAGENT_ENDPOINT` is set. |
 | tokens | Sum of iteration tokens. Phase 1 writes zeros because it does not call a model. |
 | iterations | One entry per agent-and-gate pass. `gates` is empty until gates are registered. |
+| files | Relative paths written by this run. The next run into the same output directory deletes only these paths. |
 | assumptions | Notes collected from agents. |
 | outcome | `Succeeded`, `GateFailed`, `BudgetExceeded`, `NeedsHuman`, `ConfigError`, `Error`, or `Cancelled`. `BudgetExceeded` means the Infracost estimate is above `--budget`. A token limit stops as `GateFailed` unless every remaining issue is that budget rule. `Error` and `Cancelled` are written when the run throws or the caller cancels, and the exception still propagates. The readable explanation of a gate stop is in `escalation.md`. |
 | error | First line of the exception message when the outcome is `Error` or `Cancelled`. Omitted otherwise. Secrets are redacted. |

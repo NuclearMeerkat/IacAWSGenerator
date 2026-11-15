@@ -65,7 +65,8 @@ public static class Application
                 settings.Endpoint,
                 settings.MaxRepairIterations,
                 settings.MaxTotalTokens,
-                settings.AutoApprove),
+                settings.AutoApprove,
+                settings.Verbose),
             cancellationToken).ConfigureAwait(false);
         GenerateConsole.Write(result.Outcome, result.OutputDirectory);
         return ExitCodes.For(result.Outcome);

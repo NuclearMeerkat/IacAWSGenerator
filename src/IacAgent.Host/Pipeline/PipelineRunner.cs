@@ -45,19 +45,33 @@ public sealed class PipelineRunner
         ArgumentNullException.ThrowIfNull(request);
         var outputDirectory = Path.GetFullPath(request.OutputDirectory);
         var recorder = new RunRecorder(request, _rules, _router.GetModelId(ModelTier.Strong), _router.GetModelId(ModelTier.Cheap));
+        var workspace = RunWorkspace.Create(recorder.RunId);
         try
         {
-            return await ExecuteAsync(request, outputDirectory, recorder, cancellationToken).ConfigureAwait(false);
+            return await ExecuteAsync(request, workspace, outputDirectory, recorder, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            await WriteFailureAsync(outputDirectory, recorder, exception, cancellationToken).ConfigureAwait(false);
+            await WriteFailureAsync(workspace, recorder, exception, cancellationToken).ConfigureAwait(false);
             throw;
+        }
+        finally
+        {
+            RunWorkspace.Publish(workspace, outputDirectory);
+            if (request.Verbose)
+            {
+                _logger.LogInformation("Workspace kept at {Workspace}.", workspace);
+            }
+            else
+            {
+                RunWorkspace.Delete(workspace);
+            }
         }
     }
 
     private async Task<PipelineResult> ExecuteAsync(
         GenerateRequest request,
+        string workspace,
         string outputDirectory,
         RunRecorder recorder,
         CancellationToken cancellationToken)
@@ -66,7 +80,7 @@ public sealed class PipelineRunner
         if (profile is null)
         {
             _logger.LogWarning("Profile {Profile} is not registered.", request.Profile);
-            await recorder.WriteAsync(outputDirectory, RunOutcome.ConfigError, cancellationToken).ConfigureAwait(false);
+            await recorder.WriteAsync(workspace, RunOutcome.ConfigError, cancellationToken).ConfigureAwait(false);
             return new PipelineResult(RunOutcome.ConfigError, outputDirectory);
         }
 
@@ -84,21 +98,21 @@ public sealed class PipelineRunner
         {
             recorder.RecordIteration(new IterationRecord(1, [], opening.Tokens));
             recorder.AddAssumptions(assumptions);
-            await recorder.WriteAsync(outputDirectory, RunOutcome.NeedsHuman, cancellationToken).ConfigureAwait(false);
+            await recorder.WriteAsync(workspace, RunOutcome.NeedsHuman, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Run finished with {Outcome}.", RunOutcome.NeedsHuman);
             return new PipelineResult(RunOutcome.NeedsHuman, outputDirectory);
         }
 
         if (opening.Failed)
         {
-            return await StopOpeningAsync(outputDirectory, assumptions, recorder, opening, cancellationToken).ConfigureAwait(false);
+            return await StopOpeningAsync(workspace, outputDirectory, assumptions, recorder, opening, cancellationToken).ConfigureAwait(false);
         }
 
         var (requirements, tokens) = await RunAdvisorsAsync(profile, request, opening.Requirements, assumptions, opening.Tokens, cancellationToken).ConfigureAwait(false);
-        var outcome = await new RepairLoop(_gates, _logger, _rules).RunAsync(
+        var repair = await new RepairLoop(_gates, _logger, _rules).RunAsync(
             profile,
             request,
-            outputDirectory,
+            workspace,
             requirements,
             assumptions,
             recorder,
@@ -106,9 +120,10 @@ public sealed class PipelineRunner
             loop,
             cancellationToken).ConfigureAwait(false);
         recorder.AddAssumptions(assumptions);
-        await recorder.WriteAsync(outputDirectory, outcome, cancellationToken).ConfigureAwait(false);
-        _logger.LogInformation("Run finished with {Outcome}.", outcome);
-        return new PipelineResult(outcome, outputDirectory);
+        recorder.SetFiles(repair.Files.Select(file => file.RelativePath));
+        await recorder.WriteAsync(workspace, repair.Outcome, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Run finished with {Outcome}.", repair.Outcome);
+        return new PipelineResult(repair.Outcome, outputDirectory);
     }
 
     private async Task WriteFailureAsync(
@@ -211,6 +226,7 @@ public sealed class PipelineRunner
     }
 
     private async Task<PipelineResult> StopOpeningAsync(
+        string workspace,
         string outputDirectory,
         List<string> assumptions,
         RunRecorder recorder,
@@ -224,8 +240,8 @@ public sealed class PipelineRunner
         };
         recorder.RecordIteration(new IterationRecord(1, [new GateSummary("orchestrator", false, 1)], opening.Tokens));
         recorder.AddAssumptions(assumptions);
-        await EscalationReport.WriteAsync(outputDirectory, RunOutcome.GateFailed, results, [], _rules, cancellationToken).ConfigureAwait(false);
-        await recorder.WriteAsync(outputDirectory, RunOutcome.GateFailed, cancellationToken).ConfigureAwait(false);
+        await EscalationReport.WriteAsync(workspace, RunOutcome.GateFailed, results, [], _rules, cancellationToken).ConfigureAwait(false);
+        await recorder.WriteAsync(workspace, RunOutcome.GateFailed, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Run finished with {Outcome}.", RunOutcome.GateFailed);
         return new PipelineResult(RunOutcome.GateFailed, outputDirectory);
     }

@@ -56,6 +56,8 @@ internal sealed class RunDocument
 
     public required IReadOnlyList<RunIterationDocument> Iterations { get; init; }
 
+    public required IReadOnlyList<string> Files { get; init; }
+
     public required IReadOnlyList<string> Assumptions { get; init; }
 
     public required string Outcome { get; init; }

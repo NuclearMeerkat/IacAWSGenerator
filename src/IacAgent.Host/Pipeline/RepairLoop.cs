@@ -9,7 +9,7 @@ namespace IacAgent.Host.Pipeline;
 /// <summary>Asks the developer for files, runs the gates, and stops on the loop rules.</summary>
 internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IReadOnlyList<IRedactionRule> rules)
 {
-    public async Task<RunOutcome> RunAsync(
+    public async Task<RepairResult> RunAsync(
         PipelineProfile profile,
         GenerateRequest request,
         string outputDirectory,
@@ -31,12 +31,13 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
             if (next == NextStep.Succeed)
             {
                 recorder.Include(await RunReviewerAsync(profile, request, outputDirectory, requirements, state, assumptions, cancellationToken).ConfigureAwait(false));
-                return RunOutcome.Succeeded;
+                return new RepairResult(RunOutcome.Succeeded, state.Files);
             }
 
             if (next == NextStep.Stop)
             {
-                return await StopAsync(outputDirectory, state, cancellationToken).ConfigureAwait(false);
+                var outcome = await StopAsync(outputDirectory, state, cancellationToken).ConfigureAwait(false);
+                return new RepairResult(outcome, state.Files);
             }
 
             state = state with { PreviousSignature = IssueSignature.Create(state.LastResults), Repairs = state.Repairs + 1 };
@@ -252,6 +253,8 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         TokenCount TotalTokens,
         bool FailedWithoutFiles,
         string? FailureMessage);
+
+    internal sealed record RepairResult(RunOutcome Outcome, IReadOnlyList<GeneratedFile> Files);
 
     private enum NextStep
     {

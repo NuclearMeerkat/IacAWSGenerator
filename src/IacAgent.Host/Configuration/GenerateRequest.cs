@@ -10,4 +10,5 @@ public sealed record GenerateRequest(
     string? Endpoint,
     int? MaxRepairIterations,
     int? MaxTotalTokens,
-    bool AutoApprove);
+    bool AutoApprove,
+    bool Verbose = false);

@@ -101,6 +101,7 @@ internal sealed class ProcessRunner : IProcessRunner
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+        UsePluginCache(startInfo, resolvedPath);
 
         var extension = Path.GetExtension(resolvedPath);
         var launchThroughCmd = extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase)
@@ -122,6 +123,23 @@ internal sealed class ProcessRunner : IProcessRunner
         }
 
         return startInfo;
+    }
+
+    private static void UsePluginCache(ProcessStartInfo startInfo, string resolvedPath)
+    {
+        if (!Path.GetFileNameWithoutExtension(resolvedPath).Equals("terraform", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TF_PLUGIN_CACHE_DIR")))
+        {
+            return;
+        }
+
+        var cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "iacagent", "plugin-cache");
+        Directory.CreateDirectory(cache);
+        startInfo.Environment["TF_PLUGIN_CACHE_DIR"] = cache;
     }
 
     private static string? Resolve(string fileName)
