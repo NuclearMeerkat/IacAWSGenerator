@@ -29,6 +29,7 @@ internal static class CliCommands
             ModelCheap = ReadString(parseResult, Find<string>(command, "--model-cheap")),
             Endpoint = ReadString(parseResult, Find<string>(command, "--endpoint")),
             MaxRepairIterations = ReadInt(parseResult, Find<int>(command, "--max-retries")),
+            MaxTotalTokens = ReadInt(parseResult, Find<int>(command, "--max-tokens")),
             AutoApprove = ReadBool(parseResult, Find<bool>(command, "--auto-approve")),
             Verbose = ReadBool(parseResult, Find<bool>(command, "--verbose")),
             Budget = ReadString(parseResult, Find<string>(command, "--budget")),
@@ -78,7 +79,8 @@ internal static class CliCommands
         command.Options.Add(new Option<string>("--model-strong") { Description = "Strong-tier model id." });
         command.Options.Add(new Option<string>("--model-cheap") { Description = "Cheap-tier model id." });
         command.Options.Add(new Option<string>("--endpoint") { Description = "Local model server. Omit this to use OpenRouter." });
-        command.Options.Add(new Option<int>("--max-retries") { Description = "Repair limit. Defaults to 3." });
+        command.Options.Add(new Option<int>("--max-retries") { Description = "Repair limit. Uses the profile value when omitted." });
+        command.Options.Add(new Option<int>("--max-tokens") { Description = "Token limit for the run. Uses the profile value when omitted." });
         command.Options.Add(new Option<string>("--budget") { Description = "Maximum estimated cost in USD per month." });
         command.Options.Add(new Option<bool>("--auto-approve") { Description = "Skip interactive questions." });
         command.Options.Add(new Option<bool>("--verbose") { Description = "Write debug logs." });

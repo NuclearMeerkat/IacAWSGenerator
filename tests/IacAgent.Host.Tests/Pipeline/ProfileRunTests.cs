@@ -65,7 +65,9 @@ public sealed class ProfileRunTests
                 new ProfileCatalog([new HumanProfile()]),
                 [],
                 services,
-                NullLogger<PipelineRunner>.Instance);
+                NullLogger<PipelineRunner>.Instance,
+                new FixedRouter(new ScriptedChatClient()),
+                []);
 
             var result = await runner.RunAsync(Request(directory, "human"), CancellationToken.None);
 
@@ -102,7 +104,7 @@ public sealed class ProfileRunTests
 
     private static GenerateRequest Request(string directory, string profile)
     {
-        return new GenerateRequest("hello", profile, directory, "test-model", null, null, 1, true);
+        return new GenerateRequest("hello", profile, directory, "test-model", null, null, 1, null, true);
     }
 
     private sealed class HumanProfile : IProfileDefinition

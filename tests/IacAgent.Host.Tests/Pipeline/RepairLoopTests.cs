@@ -98,6 +98,7 @@ public sealed class RepairLoopTests
         {
             var services = new ServiceCollection();
             services.AddLogging();
+            services.AddSingleton<IModelRouter>(new IdleRouter());
             services.AddHost(new ConfigurationBuilder().Build());
             services.AddSingleton<IProfileDefinition>(new HostedProfile());
             services.AddSingleton<IGate, PassingGate>();
@@ -108,6 +109,99 @@ public sealed class RepairLoopTests
 
             Assert.Equal(RunOutcome.Succeeded, result.Outcome);
             Assert.Contains("resource", await File.ReadAllTextAsync(Path.Combine(directory, "main.tf")), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_EmptyRepair_KeepsOriginalGateIssues()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var developer = new DroppingDeveloper();
+            var runner = CreateRunner(developer, new AlwaysFailGate());
+            await runner.RunAsync(Request(directory, maxRepairs: 2), CancellationToken.None);
+            var rules = developer.Seen[2]!.SelectMany(result => result.Issues).Select(issue => issue.RuleId).ToArray();
+
+            Assert.Contains("same", rules);
+            Assert.Contains("developer-output", rules);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_SameRuleOnAnotherLine_StopsAsRepeated()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var developer = new CountingDeveloper();
+            var runner = CreateRunner(developer, new MovingLineGate());
+            await runner.RunAsync(Request(directory), CancellationToken.None);
+
+            Assert.Equal(2, developer.Calls);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_MaxRetries_OverridesProfile()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var developer = new CountingDeveloper();
+            var runner = CreateRunner(developer, new AlwaysFailGate(), profileRepairs: 5);
+            await runner.RunAsync(Request(directory, maxRepairs: 0), CancellationToken.None);
+
+            Assert.Equal(1, developer.Calls);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_UnsetRetries_UsesProfileLimit()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var developer = new CountingDeveloper();
+            var runner = CreateRunner(developer, new AlwaysFailGate(), profileRepairs: 0);
+            await runner.RunAsync(Request(directory, maxRepairs: null), CancellationToken.None);
+
+            Assert.Equal(1, developer.Calls);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_MaxTokens_StopsTheLoop()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var runner = CreateRunner(new SwitchingDeveloper(), new AlwaysFailGate(), maxTokens: null);
+            var result = await runner.RunAsync(Request(directory, maxTokens: 0), CancellationToken.None);
+            using var json = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "run.json")));
+
+            Assert.Equal(RunOutcome.GateFailed, result.Outcome);
+            Assert.Single(json.RootElement.GetProperty("iterations").EnumerateArray());
         }
         finally
         {
@@ -205,6 +299,7 @@ public sealed class RepairLoopTests
         IAgent developer,
         IGate gate,
         int? maxTokens = null,
+        int profileRepairs = 3,
         IEnumerable<IRedactionRule>? rules = null,
         IModelRouter? router = null,
         IAgent? reviewer = null,
@@ -223,22 +318,35 @@ public sealed class RepairLoopTests
         }
 
         var services = new ServiceCollection().BuildServiceProvider();
-        var catalog = new ProfileCatalog([new ScriptedProfile(agents, maxTokens)]);
-        return new PipelineRunner(catalog, [gate], services, NullLogger<PipelineRunner>.Instance, router, rules);
+        var catalog = new ProfileCatalog([new ScriptedProfile(agents, profileRepairs, maxTokens)]);
+        return new PipelineRunner(catalog, [gate], services, NullLogger<PipelineRunner>.Instance, router ?? new IdleRouter(), rules ?? []);
     }
 
-    private static GenerateRequest Request(string directory, string profile = "scripted", int maxRepairs = 3)
+    private static GenerateRequest Request(string directory, string profile = "scripted", int? maxRepairs = 3, int? maxTokens = null)
     {
-        return new GenerateRequest("hello", profile, directory, "test-model", null, null, maxRepairs, true);
+        return new GenerateRequest("hello", profile, directory, "test-model", null, null, maxRepairs, maxTokens, true);
     }
 
-    private sealed class ScriptedProfile(IReadOnlyList<IAgent> agents, int? maxTokens) : IProfileDefinition
+    private sealed class ScriptedProfile(IReadOnlyList<IAgent> agents, int profileRepairs, int? maxTokens) : IProfileDefinition
     {
         public string Name => "scripted";
 
         public PipelineProfile Build(IServiceProvider services)
         {
-            return new PipelineProfile(Name, agents, new LoopPolicy(3, maxTokens));
+            return new PipelineProfile(Name, agents, new LoopPolicy(profileRepairs, maxTokens));
+        }
+    }
+
+    private sealed class IdleRouter : IModelRouter
+    {
+        public Microsoft.Extensions.AI.IChatClient GetClient(ModelTier tier)
+        {
+            throw new NotSupportedException();
+        }
+
+        public string GetModelId(ModelTier tier)
+        {
+            return "test-model";
         }
     }
 
@@ -276,6 +384,44 @@ public sealed class RepairLoopTests
         {
             _calls++;
             return Task.FromResult(new AgentResult([], Files: [new GeneratedFile("main.tf", $"# {_calls}\n")], Tokens: new TokenCount(1, 1)));
+        }
+    }
+
+    private sealed class DroppingDeveloper : IAgent
+    {
+        private int _calls;
+
+        public List<IReadOnlyList<GateResult>?> Seen { get; } = [];
+
+        public string Name => "dropping";
+
+        public AgentRole Role => AgentRole.Developer;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            _calls++;
+            Seen.Add(context.GateResults);
+            if (_calls == 1)
+            {
+                return Task.FromResult(new AgentResult([], Files: [new GeneratedFile("main.tf", "same\n")]));
+            }
+
+            return Task.FromResult(new AgentResult([], Failed: true, FailureMessage: "no files"));
+        }
+    }
+
+    private sealed class MovingLineGate : IGate
+    {
+        private int _checks;
+
+        public string Name => "moving";
+
+        public int Order => 1;
+
+        public Task<GateResult> CheckAsync(Artifact artifact, CancellationToken cancellationToken)
+        {
+            _checks++;
+            return Task.FromResult(new GateResult(Name, false, [new GateIssue("main.tf", _checks, "same", "HIGH", $"line {_checks}")]));
         }
     }
 

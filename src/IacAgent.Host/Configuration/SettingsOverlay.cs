@@ -21,6 +21,9 @@ public sealed record SettingsOverlay
     /// <summary>Gets the repair limit.</summary>
     public int? MaxRepairIterations { get; init; }
 
+    /// <summary>Gets the token limit for the whole run.</summary>
+    public int? MaxTotalTokens { get; init; }
+
     /// <summary>Gets whether interactive questions are skipped.</summary>
     public bool? AutoApprove { get; init; }
 

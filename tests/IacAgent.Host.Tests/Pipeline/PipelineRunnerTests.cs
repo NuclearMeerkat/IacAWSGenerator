@@ -208,12 +208,12 @@ public sealed class PipelineRunnerTests
     {
         var services = new ServiceCollection().BuildServiceProvider();
         var catalog = new ProfileCatalog([new FakeProfile("trio", agent)]);
-        return new PipelineRunner(catalog, gates ?? [], services, NullLogger<PipelineRunner>.Instance, rules: rules);
+        return new PipelineRunner(catalog, gates ?? [], services, NullLogger<PipelineRunner>.Instance, new IdleRouter(), rules ?? []);
     }
 
     private static GenerateRequest Request(string directory, string? endpoint)
     {
-        return new GenerateRequest("hello", "trio", directory, "test-model", null, endpoint, 3, true);
+        return new GenerateRequest("hello", "trio", directory, "test-model", null, endpoint, 3, null, true);
     }
 
     private sealed class FakeProfile(string name, IAgent agent) : IProfileDefinition
@@ -235,6 +235,19 @@ public sealed class PipelineRunnerTests
         public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
         {
             return Task.FromResult(new AgentResult(assumptions));
+        }
+    }
+
+    private sealed class IdleRouter : IModelRouter
+    {
+        public Microsoft.Extensions.AI.IChatClient GetClient(ModelTier tier)
+        {
+            throw new NotSupportedException();
+        }
+
+        public string GetModelId(ModelTier tier)
+        {
+            return "test-model";
         }
     }
 

@@ -25,7 +25,8 @@ public sealed class RunSettingsComposerTests
 
         Assert.Equal("trio", settings.Profile);
         Assert.Equal("./out", settings.OutputDirectory);
-        Assert.Equal(3, settings.MaxRepairIterations);
+        Assert.Null(settings.MaxRepairIterations);
+        Assert.Null(settings.MaxTotalTokens);
         Assert.Null(settings.Endpoint);
         Assert.Null(settings.ModelStrong);
     }

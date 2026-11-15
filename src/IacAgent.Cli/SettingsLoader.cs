@@ -27,6 +27,7 @@ internal static class SettingsLoader
             ["modelCheap"] = Environment.GetEnvironmentVariable("IACAGENT_MODEL_CHEAP"),
             ["endpoint"] = Environment.GetEnvironmentVariable("IACAGENT_ENDPOINT"),
             ["maxRetries"] = Environment.GetEnvironmentVariable("IACAGENT_MAX_RETRIES"),
+            ["maxTokens"] = Environment.GetEnvironmentVariable("IACAGENT_MAX_TOKENS"),
             ["autoApprove"] = Environment.GetEnvironmentVariable("IACAGENT_AUTO_APPROVE"),
             ["verbose"] = Environment.GetEnvironmentVariable("IACAGENT_VERBOSE"),
             ["budget"] = Environment.GetEnvironmentVariable("IACAGENT_BUDGET"),
@@ -50,13 +51,14 @@ internal static class SettingsLoader
             ModelCheap = BlankToNull(configuration["modelCheap"]),
             Endpoint = BlankToNull(configuration["endpoint"]),
             Budget = BlankToNull(configuration["budget"]),
-            MaxRepairIterations = ReadInt(configuration["maxRetries"], source, errors),
+            MaxRepairIterations = ReadInt(configuration["maxRetries"], "maxRetries", source, errors),
+            MaxTotalTokens = ReadInt(configuration["maxTokens"], "maxTokens", source, errors),
             AutoApprove = ReadBool(configuration["autoApprove"], source, errors),
             Verbose = ReadBool(configuration["verbose"], source, errors),
         };
     }
 
-    private static int? ReadInt(string? text, string source, ICollection<string> errors)
+    private static int? ReadInt(string? text, string name, string source, ICollection<string> errors)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -68,7 +70,7 @@ internal static class SettingsLoader
             return value;
         }
 
-        errors.Add($"maxRetries in {source} must be an integer.");
+        errors.Add($"{name} in {source} must be an integer.");
         return null;
     }
 

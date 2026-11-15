@@ -24,7 +24,8 @@ Command flags override environment variables, which override `iacagent.json` in 
 | `--model-strong` | `IACAGENT_MODEL_STRONG` | Strong-tier model id. |
 | `--model-cheap` | `IACAGENT_MODEL_CHEAP` | Cheap-tier model id. |
 | `--endpoint` | `IACAGENT_ENDPOINT` | Local model server. Omit it to use OpenRouter. |
-| `--max-retries` | `IACAGENT_MAX_RETRIES` | Repair limit. Default `3`. |
+| `--max-retries` | `IACAGENT_MAX_RETRIES` | Repair limit. Uses the profile value, usually `3`, when omitted. |
+| `--max-tokens` | `IACAGENT_MAX_TOKENS` | Token limit for the run. Uses the profile value when omitted. |
 | `--budget` | `IACAGENT_BUDGET` | Maximum estimated cost in USD per month. Omit it to skip Infracost. |
 | `--auto-approve` | `IACAGENT_AUTO_APPROVE` | Skip interactive questions. |
 | `--verbose` | `IACAGENT_VERBOSE` | Debug logs. |

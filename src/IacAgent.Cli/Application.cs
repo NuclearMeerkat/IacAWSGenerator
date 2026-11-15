@@ -64,6 +64,7 @@ public static class Application
                 settings.ModelCheap,
                 settings.Endpoint,
                 settings.MaxRepairIterations,
+                settings.MaxTotalTokens,
                 settings.AutoApprove),
             cancellationToken).ConfigureAwait(false);
         GenerateConsole.Write(result.Outcome, result.OutputDirectory);

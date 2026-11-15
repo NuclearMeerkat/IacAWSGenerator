@@ -25,7 +25,8 @@ public static class RunSettingsComposer
             ModelStrong = FirstText(command.ModelStrong, environment.ModelStrong, file.ModelStrong),
             ModelCheap = FirstText(command.ModelCheap, environment.ModelCheap, file.ModelCheap),
             Endpoint = FirstText(command.Endpoint, environment.Endpoint, file.Endpoint),
-            MaxRepairIterations = command.MaxRepairIterations ?? environment.MaxRepairIterations ?? file.MaxRepairIterations ?? 3,
+            MaxRepairIterations = command.MaxRepairIterations ?? environment.MaxRepairIterations ?? file.MaxRepairIterations,
+            MaxTotalTokens = command.MaxTotalTokens ?? environment.MaxTotalTokens ?? file.MaxTotalTokens,
             AutoApprove = command.AutoApprove ?? environment.AutoApprove ?? file.AutoApprove ?? false,
             Verbose = command.Verbose ?? environment.Verbose ?? file.Verbose ?? false,
             BudgetText = budgetText,
@@ -37,9 +38,14 @@ public static class RunSettingsComposer
     public static string? Validate(RunSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        if (settings.MaxRepairIterations < 0)
+        if (settings.MaxRepairIterations is < 0)
         {
             return "--max-retries must be zero or greater.";
+        }
+
+        if (settings.MaxTotalTokens is < 0)
+        {
+            return "--max-tokens must be zero or greater.";
         }
 
         if (string.IsNullOrWhiteSpace(settings.Profile))

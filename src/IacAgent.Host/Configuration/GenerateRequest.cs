@@ -8,5 +8,6 @@ public sealed record GenerateRequest(
     string? ModelStrong,
     string? ModelCheap,
     string? Endpoint,
-    int MaxRepairIterations,
+    int? MaxRepairIterations,
+    int? MaxTotalTokens,
     bool AutoApprove);
