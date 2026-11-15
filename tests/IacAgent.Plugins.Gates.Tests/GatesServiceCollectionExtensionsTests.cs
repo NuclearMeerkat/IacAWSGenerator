@@ -92,6 +92,26 @@ public sealed class GatesServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task ValidateGate_FmtExitZero_HasNoFmtIssue()
+    {
+        var result = await ValidateGate(0, string.Empty);
+
+        Assert.True(result.Passed);
+        Assert.DoesNotContain(result.Issues, issue => issue.RuleId == "terraform-fmt");
+    }
+
+    [Fact]
+    public async Task ValidateGate_FmtExitNonZero_ReturnsOneBlockingIssue()
+    {
+        var result = await ValidateGate(2, "Invalid character");
+
+        Assert.False(result.Passed);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("terraform-fmt", issue.RuleId);
+        Assert.Equal("Invalid character", issue.Message);
+    }
+
+    [Fact]
     public async Task ValidateGate_InvalidJsonDiagnostics_ReturnsIssue()
     {
         const string json = """
@@ -185,6 +205,32 @@ public sealed class GatesServiceCollectionExtensionsTests
         public Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Infracost was called.");
+        }
+    }
+
+    private static async Task<GateResult> ValidateGate(int fmtExitCode, string fmtError)
+    {
+        var gate = new ServiceCollection()
+            .AddSingleton<IProcessRunner>(new FmtProcessRunner(fmtExitCode, fmtError))
+            .AddSingleton(new BudgetLimit(null))
+            .AddGates(new ConfigurationBuilder().Build())
+            .BuildServiceProvider()
+            .GetServices<IGate>()
+            .Single(candidate => candidate.Name == "validate");
+        return await gate.CheckAsync(new Artifact(Path.GetTempPath(), []), CancellationToken.None);
+    }
+
+    private sealed class FmtProcessRunner(int fmtExitCode, string fmtError) : IProcessRunner
+    {
+        public Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken)
+        {
+            if (arguments.Count > 0 && arguments[0] == "fmt")
+            {
+                return Task.FromResult(new ProcessResult(fmtExitCode, string.Empty, fmtError));
+            }
+
+            var stdout = arguments.Contains("validate") ? """{"diagnostics":[]}""" : string.Empty;
+            return Task.FromResult(new ProcessResult(0, stdout, string.Empty));
         }
     }
 

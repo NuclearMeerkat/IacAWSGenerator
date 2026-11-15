@@ -107,7 +107,26 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         }
 
         var results = await RunGatesAsync(new Artifact(outputDirectory, turn.Files), cancellationToken).ConfigureAwait(false);
-        return state with { Files = turn.Files, LastResults = results, Tokens = turn.TotalTokens };
+        var files = Reload(outputDirectory, turn.Files);
+        return state with { Files = files, LastResults = results, Tokens = turn.TotalTokens };
+    }
+
+    private static IReadOnlyList<GeneratedFile> Reload(string directory, IReadOnlyList<GeneratedFile> files)
+    {
+        return files.Select(file => ReloadFile(directory, file)).ToList();
+    }
+
+    private static GeneratedFile ReloadFile(string directory, GeneratedFile file)
+    {
+        var relative = file.RelativePath.Replace('\\', '/').TrimStart('/');
+        var path = Path.GetFullPath(Path.Combine(directory, relative));
+        var root = Path.GetFullPath(directory + Path.DirectorySeparatorChar);
+        if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(path))
+        {
+            return file;
+        }
+
+        return file with { Content = File.ReadAllText(path) };
     }
 
     private static void RecordIteration(RunRecorder recorder, RepairState state, TokenCount iterationTokens, TokenCount openingTokens)

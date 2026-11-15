@@ -9,3 +9,5 @@ Checkov's free JSON often leaves `severity` null. The gate treats an unrated fin
 The developer prompt now says to add only the resources the prompt names, and the Checkov gate no longer fails an unrated finding unless it is an open admin port. A tool that does not finish is stopped after three minutes.
 
 The OpenAI .NET client 2.14 retries HTTP 408, 429, 500, 502, 503, and 504 up to three extra times with exponential backoff, so IacAgent adds no retry of its own. OllamaSharp talks to a local server and needs none.
+
+Formatting is a deterministic normalization: `terraform fmt` rewrites the files, and the gate still decides. A syntax error remains a blocking issue. A formatting difference does not spend a repair.

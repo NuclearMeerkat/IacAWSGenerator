@@ -26,24 +26,16 @@ internal sealed class TerraformFmtValidateGate(IProcessRunner processRunner) : I
 
     private async Task<IReadOnlyList<GateIssue>> RunFmtAsync(string directory, CancellationToken cancellationToken)
     {
-        var result = await RunAsync("terraform", ["fmt", "-check", "-recursive"], directory, cancellationToken).ConfigureAwait(false);
-        if (result.ExitCode < 0)
-        {
-            return [new GateIssue(string.Empty, null, "terraform-fmt", "error", result.StandardError)];
-        }
-
+        var result = await RunAsync("terraform", ["fmt", "-recursive"], directory, cancellationToken).ConfigureAwait(false);
         if (result.ExitCode == 0)
         {
             return [];
         }
 
-        var files = result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (files.Length == 0)
-        {
-            return [new GateIssue(string.Empty, null, "terraform-fmt", "error", FirstLine(result.StandardError, "terraform fmt failed."))];
-        }
-
-        return files.Select(file => new GateIssue(file, null, "terraform-fmt", "error", "File is not formatted.")).ToList();
+        var message = result.ExitCode < 0
+            ? result.StandardError
+            : FirstLine(result.StandardError, "terraform fmt failed.");
+        return [new GateIssue(string.Empty, null, "terraform-fmt", "error", message)];
     }
 
     private async Task RunInitAsync(string directory, List<GateIssue> issues, CancellationToken cancellationToken)

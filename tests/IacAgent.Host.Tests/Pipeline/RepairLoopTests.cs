@@ -210,6 +210,24 @@ public sealed class RepairLoopTests
     }
 
     [Fact]
+    public async Task RunAsync_FormattedFile_IsWhatTheNextRepairReceives()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var developer = new ContentRecordingDeveloper();
+            var runner = CreateRunner(developer, new RewritingGate());
+            await runner.RunAsync(Request(directory, maxRepairs: 1), CancellationToken.None);
+
+            Assert.Equal("formatted\n", developer.RepairContent);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_Repair_KeepsFilesTheDeveloperDidNotReturn()
     {
         var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
@@ -422,6 +440,46 @@ public sealed class RepairLoopTests
         {
             _checks++;
             return Task.FromResult(new GateResult(Name, false, [new GateIssue("main.tf", _checks, "same", "HIGH", $"line {_checks}")]));
+        }
+    }
+
+    private sealed class ContentRecordingDeveloper : IAgent
+    {
+        private int _calls;
+
+        public string? RepairContent { get; private set; }
+
+        public string Name => "content-recording";
+
+        public AgentRole Role => AgentRole.Developer;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            _calls++;
+            if (_calls > 1)
+            {
+                RepairContent = context.Artifact?.Files.FirstOrDefault()?.Content;
+            }
+
+            return Task.FromResult(new AgentResult([], Files: [new GeneratedFile("main.tf", "messy\n")]));
+        }
+    }
+
+    private sealed class RewritingGate : IGate
+    {
+        public string Name => "rewrite";
+
+        public int Order => 1;
+
+        public async Task<GateResult> CheckAsync(Artifact artifact, CancellationToken cancellationToken)
+        {
+            var path = Path.Combine(artifact.Directory, "main.tf");
+            if (File.Exists(path))
+            {
+                await File.WriteAllTextAsync(path, "formatted\n", cancellationToken);
+            }
+
+            return new GateResult(Name, false, [new GateIssue("main.tf", 1, "other", "HIGH", "still wrong")]);
         }
     }
 
