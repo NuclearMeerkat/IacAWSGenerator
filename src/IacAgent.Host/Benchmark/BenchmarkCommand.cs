@@ -1,5 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+
+using IacAgent.Core;
 
 using IacAgent.Host.Configuration;
 using IacAgent.Host.Recording;
@@ -14,7 +17,6 @@ public static class BenchmarkCommand
         string suiteJson,
         string? resumeDirectory,
         string? endpoint,
-        int? maxRepairIterations,
         int? maxTotalTokens,
         bool verbose,
         string toolVersion,
@@ -28,7 +30,7 @@ public static class BenchmarkCommand
         Directory.CreateDirectory(root);
         var rows = new List<IReadOnlyList<string>>();
         var csvPath = Path.Combine(root, "results.csv");
-        foreach (var combination in Combinations(suite, root, endpoint, maxRepairIterations, maxTotalTokens, verbose, toolVersion))
+        foreach (var combination in Combinations(suite, root, endpoint, maxTotalTokens, verbose, toolVersion))
         {
             cancellationToken.ThrowIfCancellationRequested();
             rows.Add(await RunCombinationAsync(combination, run, cancellationToken).ConfigureAwait(false));
@@ -58,7 +60,6 @@ public static class BenchmarkCommand
         BenchmarkSuite suite,
         string root,
         string? endpoint,
-        int? maxRepairIterations,
         int? maxTotalTokens,
         bool verbose,
         string toolVersion)
@@ -73,9 +74,25 @@ public static class BenchmarkCommand
                     {
                         foreach (var security in suite.Security)
                         {
-                            for (var repeat = 1; repeat <= suite.Repeat; repeat++)
+                            foreach (var maxRetries in suite.MaxRetries)
                             {
-                                yield return new Combination(task, profile, model, temperature, security, repeat, root, endpoint, maxRepairIterations, maxTotalTokens, verbose, toolVersion);
+                                for (var repeat = 1; repeat <= suite.Repeat; repeat++)
+                                {
+                                    yield return new Combination(
+                                        task,
+                                        profile,
+                                        model,
+                                        temperature,
+                                        security,
+                                        maxRetries,
+                                        suite.RunTimeoutMinutes,
+                                        repeat,
+                                        root,
+                                        endpoint,
+                                        maxTotalTokens,
+                                        verbose,
+                                        toolVersion);
+                                }
                             }
                         }
                     }
@@ -93,13 +110,26 @@ public static class BenchmarkCommand
         if (!File.Exists(runJson))
         {
             Directory.CreateDirectory(combination.Directory);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (combination.TimeoutMinutes == 0)
+            {
+                timeout.Cancel();
+            }
+            else
+            {
+                timeout.CancelAfter(TimeSpan.FromMinutes(combination.TimeoutMinutes));
+            }
             try
             {
-                await run(combination.Request(), combination.Task.Budget, cancellationToken).ConfigureAwait(false);
+                await run(combination.Request(), combination.Task.Budget, timeout.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+            {
+                await MarkTimedOutAsync(combination, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception)
             {
@@ -108,6 +138,58 @@ public static class BenchmarkCommand
         }
 
         return File.Exists(runJson) ? ReadRow(combination, runJson) : combination.Row("Error", 0, 0, 0, string.Empty, 0, 0, 0, 0, string.Empty, string.Empty);
+    }
+
+    private static async Task MarkTimedOutAsync(Combination combination, CancellationToken cancellationToken)
+    {
+        var message = $"timed out after {combination.TimeoutMinutes.ToString(CultureInfo.InvariantCulture)} minutes";
+        var path = Path.Combine(combination.Directory, "run.json");
+        if (!File.Exists(path))
+        {
+            var document = TimedOutDocument(combination, message);
+            await File.WriteAllTextAsync(path, JsonSerializer.Serialize(document, RunJsonContext.Default.RunDocument), cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var node = JsonNode.Parse(await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false));
+        if (node is null)
+        {
+            return;
+        }
+
+        node["outcome"] = nameof(RunOutcome.Cancelled);
+        node["error"] = message;
+        await File.WriteAllTextAsync(path, node.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), cancellationToken).ConfigureAwait(false);
+    }
+
+    private static RunDocument TimedOutDocument(Combination combination, string message)
+    {
+        var cheap = string.IsNullOrWhiteSpace(combination.Model.Cheap) ? combination.Model.Strong : combination.Model.Cheap;
+        return new RunDocument
+        {
+            SchemaVersion = 2,
+            RunId = Guid.NewGuid().ToString("D"),
+            StartedAtUtc = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
+            Profile = combination.Profile,
+            Prompt = combination.Task.Prompt,
+            Security = combination.Security,
+            ToolVersion = combination.ToolVersion,
+            Tools = new RunToolsDocument { Terraform = string.Empty, Checkov = string.Empty },
+            Models = new RunModelsDocument
+            {
+                Strong = combination.Model.Strong,
+                Cheap = cheap,
+                Provider = string.IsNullOrWhiteSpace(combination.Endpoint) ? "openrouter" : "local",
+                Temperature = combination.Temperature,
+            },
+            Tokens = new RunTokensDocument(),
+            Iterations = [],
+            Files = [],
+            Resources = new RunResourcesDocument { Types = new Dictionary<string, int>() },
+            Assumptions = [],
+            Outcome = nameof(RunOutcome.Cancelled),
+            Error = message,
+        };
     }
 
     private static IReadOnlyList<string> ReadRow(Combination combination, string runJson)
@@ -168,15 +250,24 @@ public static class BenchmarkCommand
         BenchmarkModel Model,
         string Temperature,
         string Security,
+        int? MaxRepairIterations,
+        int TimeoutMinutes,
         int Repeat,
         string Root,
         string? Endpoint,
-        int? MaxRepairIterations,
         int? MaxTotalTokens,
         bool Verbose,
         string ToolVersion)
     {
-        public string Directory => Path.Combine(Root, Task.Id, Profile, ModelFolder(), Temperature, Security, Repeat.ToString(CultureInfo.InvariantCulture));
+        public string Directory => Path.Combine(
+            Root,
+            Task.Id,
+            Profile,
+            ModelFolder(),
+            Temperature,
+            Security,
+            MaxRepairIterations?.ToString(CultureInfo.InvariantCulture) ?? "default",
+            Repeat.ToString(CultureInfo.InvariantCulture));
 
         public GenerateRequest Request()
         {
@@ -218,6 +309,7 @@ public static class BenchmarkCommand
                 cheap,
                 Temperature,
                 Security,
+                MaxRepairIterations?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
                 Repeat.ToString(CultureInfo.InvariantCulture),
                 outcome,
                 iterations.ToString(CultureInfo.InvariantCulture),

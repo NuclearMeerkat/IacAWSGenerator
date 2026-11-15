@@ -31,7 +31,7 @@ public sealed class BenchmarkCommandTests
         {
             var agent = new FileAgent();
             var requests = new List<GenerateRequest>();
-            var root = await BenchmarkCommand.RunAsync(Suite, null, null, null, null, false, "test", (request, budget, token) =>
+            var root = await BenchmarkCommand.RunAsync(Suite, null, null, null, false, "test", (request, budget, token) =>
             {
                 requests.Add(request);
                 Assert.Equal(10m, budget);
@@ -43,8 +43,9 @@ public sealed class BenchmarkCommandTests
             Assert.Equal(2, requests.Count);
             Assert.True(requests.TrueForAll(request => request.AutoApprove));
             Assert.Contains("org-model--org-cheap", requests[0].OutputDirectory, StringComparison.Ordinal);
-            Assert.Equal("Succeeded", Field(lines[1], 7));
-            Assert.Equal("Succeeded", Field(lines[2], 7));
+            Assert.Equal("Succeeded", Field(lines[1], 8));
+            Assert.Equal("Succeeded", Field(lines[2], 8));
+            Assert.Equal(string.Empty, Field(lines[1], 6));
         }
         finally
         {
@@ -58,12 +59,12 @@ public sealed class BenchmarkCommandTests
         var agent = new FileAgent();
         try
         {
-            var root = await BenchmarkCommand.RunAsync(Suite, null, null, null, null, false, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
+            var root = await BenchmarkCommand.RunAsync(Suite, null, null, null, false, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
             var repeatTwo = Directory.GetDirectories(root, "2", SearchOption.AllDirectories).Single();
             Directory.Delete(repeatTwo, true);
             var calls = agent.Calls;
 
-            await BenchmarkCommand.RunAsync(Suite, root, null, null, null, false, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
+            await BenchmarkCommand.RunAsync(Suite, root, null, null, false, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
 
             Assert.Equal(calls + 1, agent.Calls);
             Assert.Equal(3, ReadCsv(root).Length);
@@ -80,11 +81,108 @@ public sealed class BenchmarkCommandTests
         var agent = new ThrowingThenFileAgent();
         try
         {
-            var root = await BenchmarkCommand.RunAsync(Suite, null, null, null, null, false, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
+            var root = await BenchmarkCommand.RunAsync(Suite, null, null, null, false, "test", (request, _, token) => Pipeline(agent).RunAsync(request, token), CancellationToken.None);
             var lines = ReadCsv(root);
 
-            Assert.Equal("Error", Field(lines[1], 7));
-            Assert.Equal("Succeeded", Field(lines[2], 7));
+            Assert.Equal("Error", Field(lines[1], 8));
+            Assert.Equal("Succeeded", Field(lines[2], 8));
+        }
+        finally
+        {
+            DeleteBench();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_MaxRetries_AddsACombinationAndColumn()
+    {
+        const string suite = """
+            {
+              "name": "retries",
+              "repeat": 1,
+              "profiles": ["solo"],
+              "models": [{ "strong": "m" }],
+              "temperatures": [0],
+              "security": ["baseline"],
+              "maxRetries": [0, 3],
+              "tasks": [{ "id": "hello", "prompt": "hello" }]
+            }
+            """;
+        var requests = new List<GenerateRequest>();
+        try
+        {
+            var root = await BenchmarkCommand.RunAsync(
+                suite,
+                null,
+                null,
+                null,
+                false,
+                "test",
+                (request, _, token) =>
+                {
+                    requests.Add(request);
+                    return Pipeline(new ContentAgent("ok\n")).RunAsync(request, token);
+                },
+                CancellationToken.None);
+            var lines = ReadCsv(root);
+
+            Assert.Equal(3, lines.Length);
+            Assert.Equal([0, 3], requests.Select(request => request.MaxRepairIterations).ToArray());
+            Assert.EndsWith(Path.Combine("baseline", "0", "1"), requests[0].OutputDirectory, StringComparison.Ordinal);
+            Assert.EndsWith(Path.Combine("baseline", "3", "1"), requests[1].OutputDirectory, StringComparison.Ordinal);
+            Assert.Equal("0", Field(lines[1], 6));
+            Assert.Equal("3", Field(lines[2], 6));
+        }
+        finally
+        {
+            DeleteBench();
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_Timeout_WritesCancelledAndContinues()
+    {
+        const string suite = """
+            {
+              "name": "timeout",
+              "repeat": 2,
+              "runTimeoutMinutes": 0,
+              "profiles": ["solo"],
+              "models": [{ "strong": "m" }],
+              "temperatures": [0],
+              "security": ["baseline"],
+              "tasks": [{ "id": "hello", "prompt": "hello" }]
+            }
+            """;
+        var calls = 0;
+        try
+        {
+            var root = await BenchmarkCommand.RunAsync(
+                suite,
+                null,
+                null,
+                null,
+                false,
+                "test",
+                async (request, _, token) =>
+                {
+                    calls++;
+                    if (calls == 1)
+                    {
+                        await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                    }
+
+                    await Pipeline(new ContentAgent("ok\n")).RunAsync(request, token).ConfigureAwait(false);
+                },
+                CancellationToken.None);
+            var lines = ReadCsv(root);
+            var runJson = Directory.GetFiles(root, "run.json", SearchOption.AllDirectories).Select(path => File.ReadAllText(path)).ToArray();
+
+            Assert.Equal(2, calls);
+            Assert.Equal(3, lines.Length);
+            Assert.Equal("Cancelled", Field(lines[1], 8));
+            Assert.Equal("Cancelled", Field(lines[2], 8));
+            Assert.Contains(runJson, json => json.Contains("\"outcome\": \"Cancelled\"", StringComparison.Ordinal) && json.Contains("timed out after 0 minutes", StringComparison.Ordinal));
         }
         finally
         {
@@ -162,7 +260,6 @@ public sealed class BenchmarkCommandTests
         {
             var root = await BenchmarkCommand.RunAsync(
                 suite,
-                null,
                 null,
                 null,
                 null,

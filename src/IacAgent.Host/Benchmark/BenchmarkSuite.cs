@@ -14,6 +14,8 @@ internal sealed record BenchmarkSuite(
     IReadOnlyList<BenchmarkModel> Models,
     IReadOnlyList<string> Temperatures,
     IReadOnlyList<string> Security,
+    IReadOnlyList<int?> MaxRetries,
+    int RunTimeoutMinutes,
     IReadOnlyList<BenchmarkTask> Tasks)
 {
     public static BenchmarkSuite Load(string json)
@@ -43,6 +45,8 @@ internal sealed record BenchmarkSuite(
                 ReadModels(document.RootElement),
                 ReadTemperatures(document.RootElement),
                 ReadSecurity(document.RootElement),
+                ReadMaxRetries(document.RootElement),
+                ReadTimeout(document.RootElement),
                 ReadTasks(document.RootElement));
         }
     }
@@ -124,6 +128,47 @@ internal sealed record BenchmarkSuite(
         }
 
         return values.Select(value => value.ToLowerInvariant()).ToList();
+    }
+
+    private static IReadOnlyList<int?> ReadMaxRetries(JsonElement root)
+    {
+        if (!root.TryGetProperty("maxRetries", out var property))
+        {
+            return [null];
+        }
+
+        if (property.ValueKind != JsonValueKind.Array || property.GetArrayLength() == 0)
+        {
+            throw new InvalidOperationException("maxRetries must be a list of zero or greater.");
+        }
+
+        var values = new List<int?>();
+        foreach (var item in property.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Number || !item.TryGetInt32(out var retries) || retries < 0)
+            {
+                throw new InvalidOperationException("maxRetries must be a list of zero or greater.");
+            }
+
+            values.Add(retries);
+        }
+
+        return values;
+    }
+
+    private static int ReadTimeout(JsonElement root)
+    {
+        if (!root.TryGetProperty("runTimeoutMinutes", out var property))
+        {
+            return 15;
+        }
+
+        if (property.ValueKind != JsonValueKind.Number || !property.TryGetInt32(out var minutes) || minutes < 0)
+        {
+            throw new InvalidOperationException("runTimeoutMinutes must be zero or greater.");
+        }
+
+        return minutes;
     }
 
     private static IReadOnlyList<BenchmarkTask> ReadTasks(JsonElement root)

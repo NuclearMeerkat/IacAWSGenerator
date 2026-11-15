@@ -70,6 +70,8 @@ dotnet run --project src/IacAgent.Cli -- bench --suite benchmarks/hello-suite.js
 
 A task may set `expect`: a list of groups of resource types. The final run meets it when every group contains at least one type that appears in `run.json` `resources.types`. `results.csv` then has `intentMet` (`true`, `false`, or empty when `expect` is omitted) and `missingGroups` (the failing groups, joined with `|`). This column does not change the gate outcome.
 
+`maxRetries`, for example `[0, 3]`, is another combination. It is a folder after the security level and a `maxRetries` column. Each value is the repair limit for that run. When the list is omitted, the column is empty and the profile's own limit is used. `0` records the first attempt, before any repair. `runTimeoutMinutes` defaults to `15`. A run that exceeds it is `Cancelled` with the error `timed out after N minutes`, `run.json` is still written, and the suite continues.
+
 Exit codes: `0` success, `10` gate failure, `11` budget exceeded, `12` needs a human, `20` configuration or a missing prerequisite, `1` unexpected error.
 
 ## Extending

@@ -177,7 +177,6 @@ public static class Application
                 await File.ReadAllTextAsync(suitePath, cancellationToken).ConfigureAwait(false),
                 resume,
                 settings.Endpoint,
-                settings.MaxRepairIterations,
                 settings.MaxTotalTokens,
                 settings.Verbose,
                 CliVersion(),
