@@ -27,7 +27,7 @@ internal static class TerraformValidateOutputParser
             int? line = null;
             if (diagnostic.TryGetProperty("range", out var range))
             {
-                file = Path.GetFileName(ReadString(range, "filename") ?? string.Empty);
+                file = NormalizePath(ReadString(range, "filename"));
                 if (range.TryGetProperty("start", out var start)
                     && start.TryGetProperty("line", out var lineElement)
                     && lineElement.TryGetInt32(out var parsedLine))
@@ -40,6 +40,16 @@ internal static class TerraformValidateOutputParser
         }
 
         return issues;
+    }
+
+    private static string NormalizePath(string? filename)
+    {
+        if (string.IsNullOrWhiteSpace(filename))
+        {
+            return string.Empty;
+        }
+
+        return filename.Replace('\\', '/');
     }
 
     private static string? ReadString(JsonElement element, string name)

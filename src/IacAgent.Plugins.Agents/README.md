@@ -1,5 +1,9 @@
 # Agents
 
-`solo` is one developer. `trio` is the orchestrator, developer, and security reviewer. `full` adds an architect and a FinOps explainer before the developer. Prompts are embedded from `Prompts/`.
+Turns a prompt into Terraform. `solo` is one developer. `trio` adds an orchestrator and a security reviewer. `full` adds an architect and a FinOps explainer before the developer.
 
-The Orchestrator and Developer use the strong model. The reviewer uses the cheap model, or the strong model when the cheap id is unset. Add an agent by implementing `IAgent` and registering it. Do not edit Host or Core.
+Key types: `OrchestratorAgent`, `DeveloperAgent`, `SecurityReviewerAgent`, `SoloDeveloperAgent`, `ArchitectAgent`, `FinOpsExplainerAgent`. Each prompt is an embedded file under `Prompts/`.
+
+The orchestrator, developer, solo agent, and architect use the strong model. The reviewer and FinOps explainer use the cheap model, or the strong model when that id is unset.
+
+Add an agent by implementing `IAgent`, adding its prompt file, and registering it from `IacAgent.Cli`. Do not edit Host or Core.

@@ -4,4 +4,6 @@
 
 `--endpoint` switches that run to a local server. Port `11434`, or a host containing `ollama`, uses OllamaSharp. Any other URL uses the OpenAI-compatible client. Model ids come from configuration, never from this project.
 
-`PriceTable` reads `pricing` from configuration: USD per one million input and output tokens, keyed by model id. `ModelRouter.EstimateCostUsd` returns null when the id is missing. Add a price by editing `iacagent.json`, not by changing this project.
+`PriceTable` reads `pricing` from configuration: USD per one million input and output tokens, keyed by model id. `ModelRouter.EstimateCostUsd` returns null when the id is missing. Add a price by editing `iacagent.json`.
+
+A new provider is another plugin whose `AddXxx` method registers an `IModelRouter`. Do not edit Host, Core, or the other plugins.

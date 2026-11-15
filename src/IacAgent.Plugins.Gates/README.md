@@ -1,5 +1,7 @@
 # Gates
 
-`TerraformFmtValidateGate` runs fmt, init, and validate. `CheckovGate` fails on medium and above. An unrated finding fails only when it is an open admin port. Other unrated findings stay for the reviewer. `InfracostGate` compares `infracost scan --json` with `--budget` and does nothing when no budget is set.
+The host runs every registered gate, in `Order`. A profile cannot skip one.
 
-Register another gate with `services.AddSingleton<IGate, MyGate>()` and a unique `Order`. Do not edit Host or Core.
+`TerraformFmtValidateGate` (10) runs `terraform fmt -recursive`, then init and validate. `CheckovGate` (20) scans Terraform. `baseline` blocks only the host's check list. `strict` blocks every failed check except a skip list. An inline `checkov:skip` does not hide a blocking check. `InfracostGate` (30) compares the monthly estimate with `--budget` and does not run when no budget is set.
+
+Add a gate by implementing `IGate` with a unique `Order` and registering `services.AddSingleton<IGate, MyGate>()`. Do not edit Host, Core, or the other gates.

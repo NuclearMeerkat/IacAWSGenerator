@@ -7,9 +7,9 @@ Command-line tool that generates AWS Terraform from a prompt. Agents propose the
 ## Prerequisites
 
 - .NET SDK 10
-- Terraform and Checkov on `PATH` for `doctor`
-- `OPENROUTER_API_KEY` when you stay on OpenRouter
-- Infracost is reported by `doctor` and is optional until budget checks exist
+- Terraform and Checkov on `PATH`. `generate` and `doctor` need both.
+- Infracost on `PATH` when you pass `--budget`. `doctor` reports it either way.
+- `OPENROUTER_API_KEY` when you stay on OpenRouter. A local model needs `--endpoint` instead.
 
 A pip install of Checkov on Windows puts `checkov.cmd` in the Python `Scripts` directory. That directory has to be on `PATH`.
 
@@ -63,6 +63,18 @@ dotnet run --project src/IacAgent.Cli -- review --plan plan.json
 `review` redacts the plan, runs Checkov on the Terraform next to it (`--source` overrides that directory), and asks the cheap model to explain the findings. A secret in the plan is replaced with `[redacted]` before it reaches the model or the console.
 
 Exit codes: `0` success, `10` gate failure, `11` budget exceeded, `12` needs a human, `20` configuration or a missing prerequisite, `1` unexpected error.
+
+## Extending
+
+Register the new type from `IacAgent.Cli`. Do not edit Host or Core for these.
+
+| To add | Do this | Do not edit |
+|---|---|---|
+| An agent | Implement `IAgent`, add its prompt file, and register it. | Host, Core |
+| A gate | Implement `IGate` with a unique `Order` and register it. | Host, Core, other gates |
+| A profile | Implement `IProfileDefinition` and register it. Select it with `--profile <name>`. | Host, Core, `ProfileCatalog` |
+| A model provider | Add a plugin whose `AddXxx` method registers an `IModelRouter`. | Host, Core, other plugins |
+| A redaction rule | Implement `IRedactionRule` and register it. | Host, Core |
 
 ## Spike
 

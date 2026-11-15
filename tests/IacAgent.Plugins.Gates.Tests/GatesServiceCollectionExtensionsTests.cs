@@ -198,6 +198,27 @@ public sealed class GatesServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task ValidateGate_DiagnosticInASubfolder_KeepsTheFolder()
+    {
+        const string json = """
+            {"diagnostics":[{"severity":"error","summary":"Missing expression","detail":"Expected an expression.","range":{"filename":"modules\\x\\main.tf","start":{"line":4}}}]}
+            """;
+        var gate = new ServiceCollection()
+            .AddSingleton<IProcessRunner>(new TerraformProcessRunner(json))
+            .AddSingleton(new BudgetLimit(null))
+            .AddGates(new ConfigurationBuilder().Build())
+            .BuildServiceProvider()
+            .GetServices<IGate>()
+            .Single(candidate => candidate.Name == "validate");
+
+        var result = await gate.CheckAsync(new Artifact(Path.GetTempPath(), []), CancellationToken.None);
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("modules/x/main.tf", issue.File);
+        Assert.Equal(4, issue.Line);
+    }
+
+    [Fact]
     public async Task InfracostGate_OverBudget_FailsWithReadableMessage()
     {
         const string json = """
