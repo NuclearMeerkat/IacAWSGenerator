@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace IacAgent.Host.Recording;
 
 internal sealed class RunTokensDocument
@@ -57,4 +59,7 @@ internal sealed class RunDocument
     public required IReadOnlyList<string> Assumptions { get; init; }
 
     public required string Outcome { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Error { get; init; }
 }

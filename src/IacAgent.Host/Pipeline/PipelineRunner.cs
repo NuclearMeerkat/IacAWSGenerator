@@ -43,6 +43,23 @@ public sealed class PipelineRunner
         ArgumentNullException.ThrowIfNull(request);
         var outputDirectory = Path.GetFullPath(request.OutputDirectory);
         var recorder = new RunRecorder(request, _rules, _router?.GetModelId(ModelTier.Strong), _router?.GetModelId(ModelTier.Cheap));
+        try
+        {
+            return await ExecuteAsync(request, outputDirectory, recorder, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            await WriteFailureAsync(outputDirectory, recorder, exception, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<PipelineResult> ExecuteAsync(
+        GenerateRequest request,
+        string outputDirectory,
+        RunRecorder recorder,
+        CancellationToken cancellationToken)
+    {
         var profile = _catalog.Create(request.Profile, _services);
         if (profile is null)
         {
@@ -80,6 +97,37 @@ public sealed class PipelineRunner
         await recorder.WriteAsync(outputDirectory, outcome, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Run finished with {Outcome}.", outcome);
         return new PipelineResult(outcome, outputDirectory);
+    }
+
+    private async Task WriteFailureAsync(
+        string outputDirectory,
+        RunRecorder recorder,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        var cancelled = exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
+        if (!cancelled)
+        {
+            _logger.LogError(exception, "Run failed.");
+        }
+
+        recorder.SetError(FirstLine(exception));
+        try
+        {
+            await recorder.WriteAsync(outputDirectory, cancelled ? RunOutcome.Cancelled : RunOutcome.Error, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception writeException)
+        {
+            _logger.LogError(writeException, "Could not write run.json after the run failed.");
+        }
+    }
+
+    private static string FirstLine(Exception exception)
+    {
+        var message = exception.Message;
+        var end = message.IndexOfAny(['\r', '\n']);
+        var line = end < 0 ? message : message[..end];
+        return string.IsNullOrWhiteSpace(line) ? exception.GetType().Name : line.Trim();
     }
 
     private async Task<Opening> RunOrchestratorsAsync(

@@ -5,6 +5,7 @@ using IacAgent.Core;
 using IacAgent.Host;
 using IacAgent.Host.Configuration;
 using IacAgent.Host.Pipeline;
+using IacAgent.Host.Redaction;
 using IacAgent.Plugins.Models;
 
 using Microsoft.Extensions.Configuration;
@@ -152,13 +153,62 @@ public sealed class PipelineRunnerTests
         Assert.Equal(11, ExitCodes.For(RunOutcome.BudgetExceeded));
         Assert.Equal(12, ExitCodes.For(RunOutcome.NeedsHuman));
         Assert.Equal(20, ExitCodes.For(RunOutcome.ConfigError));
+        Assert.Equal(1, ExitCodes.For(RunOutcome.Error));
+        Assert.Equal(1, ExitCodes.For(RunOutcome.Cancelled));
     }
 
-    private static PipelineRunner CreateRunner(IAgent agent, IReadOnlyList<IGate>? gates = null)
+    [Fact]
+    public async Task RunAsync_AgentThrows_WritesRedactedErrorAndRethrows()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var runner = CreateRunner(
+                new ThrowingAgent("AKIAIOSFODNN7EXAMPLE broke\nsecond line"),
+                rules: [new AwsAccessKeyRedactionRule()]);
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(Request(directory, null), CancellationToken.None));
+            var json = await File.ReadAllTextAsync(Path.Combine(directory, "run.json"));
+            using var document = JsonDocument.Parse(json);
+
+            Assert.Equal("AKIAIOSFODNN7EXAMPLE broke", exception.Message.Split('\n')[0]);
+            Assert.Equal("Error", document.RootElement.GetProperty("outcome").GetString());
+            Assert.Equal("[redacted] broke", document.RootElement.GetProperty("error").GetString());
+            Assert.DoesNotContain("AKIAIOSFODNN7EXAMPLE", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("second line", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_Cancelled_WritesCancelledAndRethrows()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            using var cancellation = new CancellationTokenSource();
+            await cancellation.CancelAsync();
+            var runner = CreateRunner(new CancellingAgent());
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(Request(directory, null), cancellation.Token));
+            using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "run.json")));
+
+            Assert.Equal("Cancelled", document.RootElement.GetProperty("outcome").GetString());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static PipelineRunner CreateRunner(IAgent agent, IReadOnlyList<IGate>? gates = null, IEnumerable<IRedactionRule>? rules = null)
     {
         var services = new ServiceCollection().BuildServiceProvider();
         var catalog = new ProfileCatalog([new FakeProfile("trio", agent)]);
-        return new PipelineRunner(catalog, gates ?? [], services, NullLogger<PipelineRunner>.Instance);
+        return new PipelineRunner(catalog, gates ?? [], services, NullLogger<PipelineRunner>.Instance, rules: rules);
     }
 
     private static GenerateRequest Request(string directory, string? endpoint)
@@ -185,6 +235,31 @@ public sealed class PipelineRunnerTests
         public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
         {
             return Task.FromResult(new AgentResult(assumptions));
+        }
+    }
+
+    private sealed class ThrowingAgent(string message) : IAgent
+    {
+        public string Name => "throwing";
+
+        public AgentRole Role => AgentRole.Developer;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+
+    private sealed class CancellingAgent : IAgent
+    {
+        public string Name => "cancelling";
+
+        public AgentRole Role => AgentRole.Developer;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(new AgentResult([]));
         }
     }
 

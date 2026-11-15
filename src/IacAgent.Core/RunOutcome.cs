@@ -8,4 +8,6 @@ public enum RunOutcome
     BudgetExceeded,
     NeedsHuman,
     ConfigError,
+    Error,
+    Cancelled,
 }

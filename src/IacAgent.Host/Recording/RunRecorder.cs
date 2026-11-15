@@ -21,6 +21,7 @@ public sealed class RunRecorder : IRunRecorder
     private readonly List<string> _assumptions = [];
     private int _inputTokens;
     private int _outputTokens;
+    private string? _error;
 
     /// <summary>Starts timing a run.</summary>
     public RunRecorder(GenerateRequest request, IEnumerable<IRedactionRule>? rules = null, string? strongModel = null, string? cheapModel = null)
@@ -93,6 +94,12 @@ public sealed class RunRecorder : IRunRecorder
         };
     }
 
+    /// <summary>Stores the first line of a failure. Secrets are removed when the file is written.</summary>
+    public void SetError(string? error)
+    {
+        _error = error;
+    }
+
     /// <inheritdoc />
     public async Task WriteAsync(string outputDirectory, RunOutcome outcome, CancellationToken cancellationToken)
     {
@@ -129,6 +136,7 @@ public sealed class RunRecorder : IRunRecorder
             Iterations = _iterations,
             Assumptions = _assumptions.Select(Redact).ToList(),
             Outcome = outcome.ToString(),
+            Error = _error is null ? null : Redact(_error),
         };
     }
 

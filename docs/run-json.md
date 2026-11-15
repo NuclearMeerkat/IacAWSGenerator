@@ -16,7 +16,8 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
     { "index": 1, "gates": [ { "name": "validate", "passed": true, "issueCount": 0 } ], "tokens": { "input": 0, "output": 0 } }
   ],
   "assumptions": [ "text" ],
-  "outcome": "Succeeded"
+  "outcome": "Succeeded",
+  "error": null
 }
 ```
 
@@ -34,6 +35,7 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
 | tokens | Sum of iteration tokens. Phase 1 writes zeros because it does not call a model. |
 | iterations | One entry per agent-and-gate pass. `gates` is empty until gates are registered. |
 | assumptions | Notes collected from agents. |
-| outcome | `Succeeded`, `GateFailed`, `BudgetExceeded`, `NeedsHuman`, or `ConfigError`. `BudgetExceeded` means the Infracost estimate is above `--budget`. A token limit stops as `GateFailed` unless every remaining issue is that budget rule. The readable explanation is in `escalation.md`. |
+| outcome | `Succeeded`, `GateFailed`, `BudgetExceeded`, `NeedsHuman`, `ConfigError`, `Error`, or `Cancelled`. `BudgetExceeded` means the Infracost estimate is above `--budget`. A token limit stops as `GateFailed` unless every remaining issue is that budget rule. `Error` and `Cancelled` are written when the run throws or the caller cancels, and the exception still propagates. The readable explanation of a gate stop is in `escalation.md`. |
+| error | First line of the exception message when the outcome is `Error` or `Cancelled`. Omitted otherwise. Secrets are redacted. |
 
 Secret values are not written. The OpenRouter API key is read only from `OPENROUTER_API_KEY` and is not a field in this file.

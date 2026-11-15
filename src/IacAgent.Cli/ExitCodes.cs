@@ -33,6 +33,8 @@ public static class ExitCodes
             RunOutcome.BudgetExceeded => BudgetExceeded,
             RunOutcome.NeedsHuman => NeedsHuman,
             RunOutcome.ConfigError => ConfigError,
+            RunOutcome.Error => Unexpected,
+            RunOutcome.Cancelled => Unexpected,
             _ => Unexpected,
         };
     }
