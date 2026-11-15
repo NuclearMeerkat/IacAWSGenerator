@@ -65,4 +65,15 @@ public sealed class RunSettingsComposerTests
 
         Assert.Equal("--max-retries must be zero or greater.", error);
     }
+
+    [Fact]
+    public void Validate_UnknownSecurity_ReturnsMessage()
+    {
+        var settings = RunSettingsComposer.Compose(
+            new SettingsOverlay(),
+            new SettingsOverlay(),
+            new SettingsOverlay { Security = "paranoid" });
+
+        Assert.Equal("--security must be baseline or strict.", RunSettingsComposer.Validate(settings));
+    }
 }

@@ -28,7 +28,7 @@ public sealed class PipelineRunnerTests
             var root = json.RootElement;
 
             Assert.Equal(RunOutcome.Succeeded, result.Outcome);
-            Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+            Assert.Equal(2, root.GetProperty("schemaVersion").GetInt32());
             Assert.Equal("trio", root.GetProperty("profile").GetString());
             Assert.Equal("hello", root.GetProperty("prompt").GetString());
             Assert.Equal("Succeeded", root.GetProperty("outcome").GetString());

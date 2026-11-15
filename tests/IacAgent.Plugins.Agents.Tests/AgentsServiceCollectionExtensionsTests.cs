@@ -37,6 +37,48 @@ public sealed class AgentsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task Developer_RepairMessage_OmitsAdvisoryIssues()
+    {
+        var client = new ScriptedChatClient("""{"files":[{"path":"main.tf","content":"ok\n"}]}""");
+        using var provider = CreateProvider(client);
+        var developer = Profile(provider, "trio").Agents.Single(agent => agent.Role == AgentRole.Developer);
+        var results = new[]
+        {
+            new GateResult("checkov", false,
+            [
+                new GateIssue("main.tf", 1, "CKV_AWS_24", "UNKNOWN", "ssh", true),
+                new GateIssue("main.tf", 2, "CKV2_AWS_5", "UNKNOWN", "unattached", false),
+            ]),
+        };
+
+        await developer.RunAsync(new AgentContext("hello", true, """{"summary":"api"}""", null, results), CancellationToken.None);
+
+        Assert.Contains("CKV_AWS_24", client.LastUser, StringComparison.Ordinal);
+        Assert.DoesNotContain("CKV2_AWS_5", client.LastUser, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Reviewer_ReceivesOnlyAdvisoryIssues()
+    {
+        var client = new ScriptedChatClient("notes");
+        using var provider = CreateProvider(client);
+        var reviewer = Profile(provider, "trio").Agents.Single(agent => agent.Role == AgentRole.Reviewer);
+        var results = new[]
+        {
+            new GateResult("checkov", false,
+            [
+                new GateIssue("main.tf", 1, "CKV_AWS_24", "UNKNOWN", "ssh", true),
+                new GateIssue("main.tf", 2, "CKV2_AWS_5", "UNKNOWN", "unattached", false),
+            ]),
+        };
+
+        await reviewer.RunAsync(new AgentContext("hello", true, null, null, results), CancellationToken.None);
+
+        Assert.Contains("CKV2_AWS_5", client.LastUser, StringComparison.Ordinal);
+        Assert.DoesNotContain("CKV_AWS_24", client.LastUser, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Orchestrator_AutoApprove_DoesNotAsk()
     {
         var interaction = new RecordingInteraction();
@@ -152,8 +194,11 @@ public sealed class AgentsServiceCollectionExtensionsTests
             return null;
         }
 
+        public string? LastUser { get; private set; }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
+            LastUser = messages.Last().Text;
             var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, _responses.Dequeue()))
             {
                 Usage = new UsageDetails { InputTokenCount = 2, OutputTokenCount = 3 },

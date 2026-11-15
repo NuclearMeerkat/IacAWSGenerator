@@ -210,6 +210,41 @@ public sealed class RepairLoopTests
     }
 
     [Fact]
+    public async Task RunAsync_AdvisoryOnly_Succeeds()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var runner = CreateRunner(new SwitchingDeveloper(), new AdvisoryGate());
+            var result = await runner.RunAsync(Request(directory, maxRepairs: 0), CancellationToken.None);
+
+            Assert.Equal(RunOutcome.Succeeded, result.Outcome);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_AdvisoryNoise_DoesNotStopTheRepeatCheck()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var developer = new CountingDeveloper();
+            var runner = CreateRunner(developer, new NoisyBlockingGate());
+            await runner.RunAsync(Request(directory), CancellationToken.None);
+
+            Assert.Equal(2, developer.Calls);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_FormattedFile_IsWhatTheNextRepairReceives()
     {
         var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
@@ -607,6 +642,37 @@ public sealed class RepairLoopTests
         }
     }
 
+    private sealed class AdvisoryGate : IGate
+    {
+        public string Name => "advisory";
+
+        public int Order => 1;
+
+        public Task<GateResult> CheckAsync(Artifact artifact, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new GateResult(Name, true, [new GateIssue("main.tf", 1, "CKV2_AWS_5", "UNKNOWN", "unattached", false)]));
+        }
+    }
+
+    private sealed class NoisyBlockingGate : IGate
+    {
+        private int _checks;
+
+        public string Name => "noisy";
+
+        public int Order => 1;
+
+        public Task<GateResult> CheckAsync(Artifact artifact, CancellationToken cancellationToken)
+        {
+            _checks++;
+            return Task.FromResult(new GateResult(Name, false,
+            [
+                new GateIssue("main.tf", 1, "CKV_AWS_24", "UNKNOWN", "ssh", true),
+                new GateIssue("main.tf", _checks, "CKV2_AWS_5", "UNKNOWN", "noise", false),
+            ]));
+        }
+    }
+
     private sealed class LowIssueGate : IGate
     {
         public string Name => "low";
@@ -615,7 +681,7 @@ public sealed class RepairLoopTests
 
         public Task<GateResult> CheckAsync(Artifact artifact, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new GateResult(Name, true, [new GateIssue("main.tf", 1, "CKV_AWS_1", "LOW", "tag")]));
+            return Task.FromResult(new GateResult(Name, true, [new GateIssue("main.tf", 1, "CKV_AWS_1", "LOW", "tag", false)]));
         }
     }
 

@@ -4,8 +4,8 @@ using IacAgent.Core;
 
 namespace IacAgent.Plugins.Gates.Checkov;
 
-/// <summary>Runs Checkov and fails on medium and above, plus open admin ports even when Checkov omits a severity.</summary>
-internal sealed class CheckovGate(IProcessRunner processRunner) : IGate
+/// <summary>Runs Checkov and blocks only the findings the host policy marks as blocking.</summary>
+internal sealed class CheckovGate(IProcessRunner processRunner, CheckovOptions options) : IGate
 {
     /// <inheritdoc />
     public string Name => "checkov";
@@ -33,13 +33,22 @@ internal sealed class CheckovGate(IProcessRunner processRunner) : IGate
 
         try
         {
-            var issues = CheckovOutputParser.Parse(result.StandardOutput);
-            var passed = issues.All(issue => !CheckovOutputParser.FailsGate(issue));
+            var policy = new CheckovPolicy(options);
+            var issues = CheckovOutputParser.Parse(result.StandardOutput)
+                .Select(issue => issue with { IsBlocking = policy.IsBlocking(issue.RuleId) })
+                .Where(issue => issue.IsBlocking || !IsSuppression(issue.Message))
+                .ToList();
+            var passed = issues.All(issue => !issue.IsBlocking);
             return new GateResult(Name, passed, issues);
         }
         catch (JsonException)
         {
             return new GateResult(Name, false, [new GateIssue(string.Empty, null, "checkov", "error", "Checkov did not return JSON.")]);
         }
+    }
+
+    private static bool IsSuppression(string message)
+    {
+        return message.StartsWith("Suppressed with checkov:skip", StringComparison.Ordinal);
     }
 }

@@ -13,6 +13,7 @@ using IacAgent.Plugins.Gates.Infracost;
 using IacAgent.Plugins.Models;
 using IacAgent.Plugins.Terraform;
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -66,7 +67,8 @@ public static class Application
                 settings.MaxRepairIterations,
                 settings.MaxTotalTokens,
                 settings.AutoApprove,
-                settings.Verbose),
+                settings.Verbose,
+                settings.Security),
             cancellationToken).ConfigureAwait(false);
         GenerateConsole.Write(result.Outcome, result.OutputDirectory);
         return ExitCodes.For(result.Outcome);
@@ -161,6 +163,11 @@ public static class Application
             Args = [],
         });
         builder.Logging.SetMinimumLevel(settings.Verbose ? LogLevel.Debug : LogLevel.Information);
+        builder.Configuration.AddJsonFile("iacagent.json", optional: true, reloadOnChange: false);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Checkov:Level"] = settings.Security,
+        });
         builder.Services.AddSingleton(new ModelConnection(settings.ModelStrong, settings.ModelCheap, settings.Endpoint));
         builder.Services.AddSingleton<IUserInteraction, ConsoleUserInteraction>();
         builder.Services.AddSingleton<IRedactionRule, AwsAccessKeyRedactionRule>();

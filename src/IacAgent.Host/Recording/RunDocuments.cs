@@ -16,6 +16,8 @@ internal sealed class RunGateDocument
     public bool Passed { get; init; }
 
     public int IssueCount { get; init; }
+
+    public int BlockingCount { get; init; }
 }
 
 internal sealed class RunIterationDocument
@@ -49,6 +51,8 @@ internal sealed class RunDocument
     public required string Profile { get; init; }
 
     public required string Prompt { get; init; }
+
+    public required string Security { get; init; }
 
     public required RunModelsDocument Models { get; init; }
 

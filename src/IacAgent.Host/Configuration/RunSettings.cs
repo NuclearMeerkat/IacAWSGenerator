@@ -24,6 +24,9 @@ public sealed record RunSettings
     /// <summary>Gets the token limit. Null means the profile value is used.</summary>
     public int? MaxTotalTokens { get; init; }
 
+    /// <summary>Gets the Checkov policy. <c>baseline</c> or <c>strict</c>.</summary>
+    public string Security { get; init; } = "baseline";
+
     /// <summary>Gets whether interactive questions are skipped.</summary>
     public bool AutoApprove { get; init; }
 

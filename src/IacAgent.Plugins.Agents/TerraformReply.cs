@@ -23,7 +23,7 @@ internal static class TerraformReply
         builder.AppendLine("Gate issues:");
         foreach (var result in context.GateResults.Where(result => !result.Passed))
         {
-            foreach (var issue in result.Issues)
+            foreach (var issue in result.Issues.Where(issue => issue.IsBlocking))
             {
                 builder.Append(result.GateName).Append(' ').Append(issue.File).Append(':').Append(issue.Line).Append(' ');
                 builder.Append('[').Append(issue.Severity).Append("] ").Append(issue.RuleId).Append(": ").AppendLine(issue.Message);

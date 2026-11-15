@@ -92,6 +92,70 @@ public sealed class GatesServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task CheckovGate_SavedOutput_BaselineBlocksListedCheckOnly()
+    {
+        var json = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Samples", "checkov-security-group.json"));
+        var result = await Checkov(json, new ConfigurationBuilder().Build());
+
+        Assert.False(result.Passed);
+        Assert.True(result.Issues.Single(issue => issue.RuleId == "CKV_AWS_24").IsBlocking);
+        Assert.False(result.Issues.Single(issue => issue.RuleId == "CKV2_AWS_5").IsBlocking);
+    }
+
+    [Fact]
+    public async Task CheckovGate_Strict_FailsUnlistedCheck()
+    {
+        const string json = """
+            {"results":{"failed_checks":[{"check_id":"CKV2_AWS_5","check_name":"unattached","file_path":"/main.tf","file_line_range":[1,2]}]}}
+            """;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Checkov:Level"] = "strict" }).Build();
+        var result = await Checkov(json, configuration);
+
+        Assert.False(result.Passed);
+        Assert.True(Assert.Single(result.Issues).IsBlocking);
+    }
+
+    [Fact]
+    public async Task CheckovGate_StrictSkip_PassesListedSkip()
+    {
+        const string json = """
+            {"results":{"failed_checks":[{"check_id":"CKV_AWS_24","check_name":"open ssh","file_path":"/main.tf","file_line_range":[1,2]}]}}
+            """;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Checkov:Level"] = "strict",
+            ["Checkov:StrictSkipChecks:0"] = "CKV_AWS_24",
+        }).Build();
+        var result = await Checkov(json, configuration);
+
+        Assert.True(result.Passed);
+        Assert.False(Assert.Single(result.Issues).IsBlocking);
+    }
+
+    [Fact]
+    public async Task CheckovGate_SkippedBlockingCheck_FailsWithSuppressionMessage()
+    {
+        const string json = """
+            {"results":{"skipped_checks":[{"check_id":"CKV_AWS_24","check_name":"open ssh","file_path":"/main.tf","file_line_range":[1,4]}]}}
+            """;
+        var result = await Checkov(json, new ConfigurationBuilder().Build());
+
+        Assert.False(result.Passed);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("Suppressed with checkov:skip. Remove the suppression and fix the resource.", issue.Message);
+    }
+
+    [Fact]
+    public void AddGates_UnknownLevel_Throws()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Checkov:Level"] = "paranoid" }).Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddGates(configuration));
+
+        Assert.Contains("baseline or strict", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ValidateGate_FmtExitZero_HasNoFmtIssue()
     {
         var result = await ValidateGate(0, string.Empty);
@@ -206,6 +270,18 @@ public sealed class GatesServiceCollectionExtensionsTests
         {
             throw new InvalidOperationException("Infracost was called.");
         }
+    }
+
+    private static async Task<GateResult> Checkov(string json, IConfiguration configuration)
+    {
+        var gate = new ServiceCollection()
+            .AddSingleton<IProcessRunner>(new ScriptedProcessRunner(json))
+            .AddSingleton(new BudgetLimit(null))
+            .AddGates(configuration)
+            .BuildServiceProvider()
+            .GetServices<IGate>()
+            .Single(candidate => candidate.Name == "checkov");
+        return await gate.CheckAsync(new Artifact(Path.GetTempPath(), []), CancellationToken.None);
     }
 
     private static async Task<GateResult> ValidateGate(int fmtExitCode, string fmtError)

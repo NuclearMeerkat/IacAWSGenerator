@@ -26,46 +26,31 @@ internal static class CheckovOutputParser
         return issues;
     }
 
-    private static readonly HashSet<string> OpenAdminPortRules = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "CKV_AWS_23",
-        "CKV_AWS_24",
-        "CKV_AWS_25",
-        "CKV_AWS_260",
-    };
-
-    public static bool FailsGate(GateIssue issue)
-    {
-        if (issue.Severity.Equals("CRITICAL", StringComparison.OrdinalIgnoreCase)
-            || issue.Severity.Equals("HIGH", StringComparison.OrdinalIgnoreCase)
-            || issue.Severity.Equals("MEDIUM", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (issue.Severity.Equals("LOW", StringComparison.OrdinalIgnoreCase)
-            || issue.Severity.Equals("INFO", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return OpenAdminPortRules.Contains(issue.RuleId);
-    }
-
     private static void ReadReport(JsonElement report, List<GateIssue> issues)
     {
-        if (!report.TryGetProperty("results", out var results)
-            || !results.TryGetProperty("failed_checks", out var failedChecks)
-            || failedChecks.ValueKind != JsonValueKind.Array)
+        if (!report.TryGetProperty("results", out var results))
         {
             return;
         }
 
-        foreach (var check in failedChecks.EnumerateArray())
+        ReadChecks(results, "failed_checks", issues, suppressed: false);
+        ReadChecks(results, "skipped_checks", issues, suppressed: true);
+    }
+
+    private static void ReadChecks(JsonElement results, string name, List<GateIssue> issues, bool suppressed)
+    {
+        if (!results.TryGetProperty(name, out var checks) || checks.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (var check in checks.EnumerateArray())
         {
             var ruleId = ReadString(check, "check_id") ?? "checkov";
             var severity = ReadString(check, "severity") ?? "UNKNOWN";
-            var message = ReadString(check, "check_name") ?? ruleId;
+            var message = suppressed
+                ? "Suppressed with checkov:skip. Remove the suppression and fix the resource."
+                : ReadString(check, "check_name") ?? ruleId;
             var file = NormalizePath(ReadString(check, "file_path") ?? string.Empty);
             int? line = null;
             if (check.TryGetProperty("file_line_range", out var lineRange)

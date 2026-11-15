@@ -8,7 +8,7 @@ internal static class IssueSignature
     {
         var lines = results
             .Where(result => !result.Passed)
-            .SelectMany(result => result.Issues.Select(issue =>
+            .SelectMany(result => result.Issues.Where(issue => issue.IsBlocking).Select(issue =>
                 $"{result.GateName}|{issue.RuleId}|{issue.File}"))
             .Order(StringComparer.Ordinal);
         return string.Join('\n', lines);

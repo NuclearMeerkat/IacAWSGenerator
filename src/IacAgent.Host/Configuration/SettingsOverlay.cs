@@ -24,6 +24,9 @@ public sealed record SettingsOverlay
     /// <summary>Gets the token limit for the whole run.</summary>
     public int? MaxTotalTokens { get; init; }
 
+    /// <summary>Gets the Checkov policy name.</summary>
+    public string? Security { get; init; }
+
     /// <summary>Gets whether interactive questions are skipped.</summary>
     public bool? AutoApprove { get; init; }
 

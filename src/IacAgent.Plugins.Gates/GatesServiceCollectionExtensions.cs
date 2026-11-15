@@ -16,6 +16,7 @@ public static class GatesServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+        services.AddSingleton(CheckovOptions.Bind(configuration));
         services.AddSingleton<IGate, TerraformFmtValidateGate>();
         services.AddSingleton<IGate, CheckovGate>();
         services.AddSingleton<IGate, InfracostGate>();

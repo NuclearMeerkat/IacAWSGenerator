@@ -14,6 +14,7 @@ public sealed class RunRecorder : IRunRecorder
     private readonly IReadOnlyList<IRedactionRule> _rules;
     private readonly string? _strongModel;
     private readonly string? _cheapModel;
+    private readonly string _security;
     private readonly string _runId;
 
     /// <summary>Gets the id used for run.json and the temporary workspace.</summary>
@@ -28,13 +29,14 @@ public sealed class RunRecorder : IRunRecorder
     private string? _error;
 
     /// <summary>Starts timing a run.</summary>
-    public RunRecorder(GenerateRequest request, IEnumerable<IRedactionRule>? rules = null, string? strongModel = null, string? cheapModel = null)
+    public RunRecorder(GenerateRequest request, IEnumerable<IRedactionRule>? rules = null, string? strongModel = null, string? cheapModel = null, string security = "baseline")
     {
         ArgumentNullException.ThrowIfNull(request);
         _request = request;
         _rules = rules?.ToList() ?? [];
         _strongModel = strongModel;
         _cheapModel = cheapModel;
+        _security = string.IsNullOrWhiteSpace(security) ? "baseline" : security;
         _runId = Guid.NewGuid().ToString("D");
         _startedAtUtc = DateTime.UtcNow;
         _stopwatch = Stopwatch.StartNew();
@@ -61,6 +63,7 @@ public sealed class RunRecorder : IRunRecorder
                 Name = gate.Name,
                 Passed = gate.Passed,
                 IssueCount = gate.IssueCount,
+                BlockingCount = gate.BlockingCount,
             }).ToList(),
             Tokens = new RunTokensDocument
             {
@@ -127,12 +130,13 @@ public sealed class RunRecorder : IRunRecorder
     {
         return new RunDocument
         {
-            SchemaVersion = 1,
+            SchemaVersion = 2,
             RunId = _runId,
             StartedAtUtc = _startedAtUtc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
             DurationMs = _stopwatch.ElapsedMilliseconds,
             Profile = _request.Profile,
             Prompt = Redact(_request.Prompt),
+            Security = _security,
             Models = new RunModelsDocument
             {
                 Strong = string.IsNullOrWhiteSpace(_strongModel) ? _request.ModelStrong ?? string.Empty : _strongModel,

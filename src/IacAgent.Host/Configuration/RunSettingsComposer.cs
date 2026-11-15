@@ -27,6 +27,7 @@ public static class RunSettingsComposer
             Endpoint = FirstText(command.Endpoint, environment.Endpoint, file.Endpoint),
             MaxRepairIterations = command.MaxRepairIterations ?? environment.MaxRepairIterations ?? file.MaxRepairIterations,
             MaxTotalTokens = command.MaxTotalTokens ?? environment.MaxTotalTokens ?? file.MaxTotalTokens,
+            Security = NormalizeSecurity(FirstText(command.Security, environment.Security, file.Security)) ?? "baseline",
             AutoApprove = command.AutoApprove ?? environment.AutoApprove ?? file.AutoApprove ?? false,
             Verbose = command.Verbose ?? environment.Verbose ?? file.Verbose ?? false,
             BudgetText = budgetText,
@@ -46,6 +47,11 @@ public static class RunSettingsComposer
         if (settings.MaxTotalTokens is < 0)
         {
             return "--max-tokens must be zero or greater.";
+        }
+
+        if (!IsSecurity(settings.Security))
+        {
+            return "--security must be baseline or strict.";
         }
 
         if (string.IsNullOrWhiteSpace(settings.Profile))
@@ -69,6 +75,31 @@ public static class RunSettingsComposer
         }
 
         return null;
+    }
+
+    private static string? NormalizeSecurity(string? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value.Equals("baseline", StringComparison.OrdinalIgnoreCase))
+        {
+            return "baseline";
+        }
+
+        if (value.Equals("strict", StringComparison.OrdinalIgnoreCase))
+        {
+            return "strict";
+        }
+
+        return value;
+    }
+
+    private static bool IsSecurity(string value)
+    {
+        return value is "baseline" or "strict";
     }
 
     private static string? FirstText(params string?[] values)

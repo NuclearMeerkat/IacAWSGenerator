@@ -4,7 +4,7 @@ using IacAgent.Core;
 
 namespace IacAgent.Plugins.Agents.Trio;
 
-/// <summary>Summarizes low-severity Checkov findings. It cannot change the gate outcome.</summary>
+/// <summary>Summarizes advisory Checkov findings. It cannot change the gate outcome.</summary>
 internal sealed class SecurityReviewerAgent(IModelRouter router, IEnumerable<IRedactionRule> rules) : IAgent
 {
     private readonly string _prompt = ChatText.ReadPrompt("SecurityReviewer.md");
@@ -21,7 +21,7 @@ internal sealed class SecurityReviewerAgent(IModelRouter router, IEnumerable<IRe
         ArgumentNullException.ThrowIfNull(context);
         var findings = (context.GateResults ?? [])
             .SelectMany(result => result.Issues)
-            .Where(IsReviewFinding)
+            .Where(issue => !issue.IsBlocking)
             .ToList();
         if (findings.Count == 0)
         {
@@ -37,12 +37,5 @@ internal sealed class SecurityReviewerAgent(IModelRouter router, IEnumerable<IRe
         var client = router.GetClient(ModelTier.Cheap);
         var (text, tokens) = await ChatText.CompleteAsync(client, _prompt, builder.ToString(), rules, cancellationToken).ConfigureAwait(false);
         return new AgentResult([], Review: text, Tokens: tokens);
-    }
-
-    private static bool IsReviewFinding(GateIssue issue)
-    {
-        return issue.Severity.Equals("LOW", StringComparison.OrdinalIgnoreCase)
-            || issue.Severity.Equals("INFO", StringComparison.OrdinalIgnoreCase)
-            || issue.Severity.Equals("UNKNOWN", StringComparison.OrdinalIgnoreCase);
     }
 }

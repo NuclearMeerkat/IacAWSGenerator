@@ -11,3 +11,5 @@ The developer prompt now says to add only the resources the prompt names, and th
 The OpenAI .NET client 2.14 retries HTTP 408, 429, 500, 502, 503, and 504 up to three extra times with exponential backoff, so IacAgent adds no retry of its own. OllamaSharp talks to a local server and needs none.
 
 Formatting is a deterministic normalization: `terraform fmt` rewrites the files, and the gate still decides. A syntax error remains a blocking issue. A formatting difference does not spend a repair.
+
+Checkov findings are blocking or advisory. The host policy decides, because free Checkov leaves severity empty. `baseline` blocks only holes that are fixed by changing an attribute: open SSH or RDP, all ports open to the world, IAM admin policies, public S3 access, and encryption or public-access flags. Extra hardening stays advisory, so the developer does not add a VPC, a KMS key, or a code-signing resource to silence it. `strict` blocks every failed check except a skip list. An inline `checkov:skip` does not hide a blocking check.

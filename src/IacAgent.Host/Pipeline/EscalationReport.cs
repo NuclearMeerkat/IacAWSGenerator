@@ -22,19 +22,35 @@ internal static class EscalationReport
             "## Remaining issues",
         };
 
-        var issues = results.Where(result => !result.Passed).SelectMany(result => result.Issues.Select(issue => (result.GateName, issue)));
-        var any = false;
-        foreach (var (gate, issue) in issues)
+        var blocking = new List<(string Gate, GateIssue Issue)>();
+        var advisory = 0;
+        foreach (var result in results)
         {
-            any = true;
+            foreach (var issue in result.Issues)
+            {
+                if (issue.IsBlocking && !result.Passed)
+                {
+                    blocking.Add((result.GateName, issue));
+                }
+                else if (!issue.IsBlocking)
+                {
+                    advisory++;
+                }
+            }
+        }
+
+        if (blocking.Count == 0)
+        {
+            lines.Add("- None.");
+        }
+
+        foreach (var (gate, issue) in blocking)
+        {
             var line = issue.Line?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-";
             lines.Add($"- {gate} {issue.File}:{line} [{issue.Severity}] {issue.RuleId}: {Redact(issue.Message, rules)}");
         }
 
-        if (!any)
-        {
-            lines.Add("- None.");
-        }
+        lines.Add($"Advisory findings: {advisory}.");
 
         lines.Add(string.Empty);
         lines.Add("## Last attempt");

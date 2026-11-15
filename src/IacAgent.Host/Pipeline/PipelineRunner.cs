@@ -44,7 +44,7 @@ public sealed class PipelineRunner
     {
         ArgumentNullException.ThrowIfNull(request);
         var outputDirectory = Path.GetFullPath(request.OutputDirectory);
-        var recorder = new RunRecorder(request, _rules, _router.GetModelId(ModelTier.Strong), _router.GetModelId(ModelTier.Cheap));
+        var recorder = new RunRecorder(request, _rules, _router.GetModelId(ModelTier.Strong), _router.GetModelId(ModelTier.Cheap), request.Security);
         var workspace = RunWorkspace.Create(recorder.RunId);
         try
         {

@@ -132,7 +132,11 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
     private static void RecordIteration(RunRecorder recorder, RepairState state, TokenCount iterationTokens, TokenCount openingTokens)
     {
         var tokens = state.Repairs == 0 ? Add(openingTokens, iterationTokens) : iterationTokens;
-        var gates = state.LastResults.Select(result => new GateSummary(result.GateName, result.Passed, result.Issues.Count)).ToList();
+        var gates = state.LastResults.Select(result => new GateSummary(
+            result.GateName,
+            result.Passed,
+            result.Issues.Count,
+            result.Issues.Count(issue => issue.IsBlocking))).ToList();
         recorder.RecordIteration(new IterationRecord(state.Repairs + 1, gates, tokens));
     }
 
@@ -174,7 +178,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         CancellationToken cancellationToken)
     {
         var reviewer = profile.Agents.FirstOrDefault(agent => agent.Role == AgentRole.Reviewer);
-        if (reviewer is null || !state.LastResults.SelectMany(result => result.Issues).Any(IsLowSeverity))
+        if (reviewer is null || !state.LastResults.SelectMany(result => result.Issues).Any(issue => !issue.IsBlocking))
         {
             return new TokenCount(0, 0);
         }
@@ -237,7 +241,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
 
     private static IReadOnlyList<GeneratedFile> FailingFiles(IReadOnlyList<GeneratedFile> files, IReadOnlyList<GateResult> results)
     {
-        var names = results.SelectMany(result => result.Issues).Select(issue => issue.File).Where(file => !string.IsNullOrWhiteSpace(file)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var names = results.SelectMany(result => result.Issues).Where(issue => issue.IsBlocking).Select(issue => issue.File).Where(file => !string.IsNullOrWhiteSpace(file)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (names.Count == 0)
         {
             return files;
@@ -245,13 +249,6 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
 
         var matched = files.Where(file => names.Contains(file.RelativePath) || names.Contains(Path.GetFileName(file.RelativePath))).ToList();
         return matched.Count == 0 ? files : matched;
-    }
-
-    private static bool IsLowSeverity(GateIssue issue)
-    {
-        return issue.Severity.Equals("LOW", StringComparison.OrdinalIgnoreCase)
-            || issue.Severity.Equals("INFO", StringComparison.OrdinalIgnoreCase)
-            || issue.Severity.Equals("UNKNOWN", StringComparison.OrdinalIgnoreCase);
     }
 
     private static TokenCount Add(TokenCount current, TokenCount? addition)

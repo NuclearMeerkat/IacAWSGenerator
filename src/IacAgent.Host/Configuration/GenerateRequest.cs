@@ -11,4 +11,5 @@ public sealed record GenerateRequest(
     int? MaxRepairIterations,
     int? MaxTotalTokens,
     bool AutoApprove,
-    bool Verbose = false);
+    bool Verbose = false,
+    string Security = "baseline");
