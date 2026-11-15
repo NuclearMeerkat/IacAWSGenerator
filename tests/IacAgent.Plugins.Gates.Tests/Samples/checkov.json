@@ -1,0 +1,21 @@
+{
+  "check_type": "terraform",
+  "results": {
+    "failed_checks": [
+      {
+        "check_id": "CKV_AWS_24",
+        "check_name": "Ensure no security groups allow ingress from 0.0.0.0/0 to port 22",
+        "file_path": "/main.tf",
+        "file_line_range": [4, 10],
+        "resource": "aws_security_group.open",
+        "severity": "HIGH"
+      }
+    ]
+  },
+  "summary": {
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "resource_count": 1
+  }
+}

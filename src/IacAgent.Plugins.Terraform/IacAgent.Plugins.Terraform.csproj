@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="IacAgent.Host.Tests" />
+    <InternalsVisibleTo Include="IacAgent.Plugins.Gates.Tests" />
   </ItemGroup>
 
 </Project>

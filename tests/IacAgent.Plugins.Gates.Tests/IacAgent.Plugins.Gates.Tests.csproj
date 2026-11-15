@@ -20,6 +20,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\IacAgent.Plugins.Gates\IacAgent.Plugins.Gates.csproj" />
+    <ProjectReference Include="..\..\src\IacAgent.Plugins.Terraform\IacAgent.Plugins.Terraform.csproj" />
+    <None Include="..\fixtures\valid\**\*" CopyToOutputDirectory="PreserveNewest" Link="fixtures\valid\%(Filename)%(Extension)" />
+    <None Include="..\fixtures\invalid-syntax\**\*" CopyToOutputDirectory="PreserveNewest" Link="fixtures\invalid-syntax\%(Filename)%(Extension)" />
+    <None Include="..\fixtures\insecure\main.tf" CopyToOutputDirectory="PreserveNewest" Link="fixtures\insecure\main.tf" />
   </ItemGroup>
 
   <ItemGroup>
