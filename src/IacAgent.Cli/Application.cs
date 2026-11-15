@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using IacAgent.Core;
 using IacAgent.Host;
+using IacAgent.Host.Benchmark;
 using IacAgent.Host.Configuration;
 using IacAgent.Host.Pipeline;
 using IacAgent.Host.Redaction;
@@ -29,7 +30,7 @@ public static class Application
     /// <summary>Parses arguments and runs doctor or generate.</summary>
     public static async Task<int> RunAsync(string[] args, CancellationToken cancellationToken = default)
     {
-        var root = CliCommands.Create(GenerateAsync, DoctorAsync, ReviewAsync);
+        var root = CliCommands.Create(GenerateAsync, DoctorAsync, ReviewAsync, BenchAsync);
         var parsed = root.Parse(args);
         if (parsed.Errors.Count > 0)
         {
@@ -153,6 +154,58 @@ public static class Application
             Console.Error.WriteLine(exception.Message);
             return ExitCodes.ConfigError;
         }
+    }
+
+    private static async Task<int> BenchAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        var (suitePath, resume, endpoint) = CliCommands.ReadBench(parseResult);
+        if (string.IsNullOrWhiteSpace(suitePath) || !File.Exists(suitePath))
+        {
+            Console.Error.WriteLine("Pass --suite with an existing suite file.");
+            return ExitCodes.ConfigError;
+        }
+
+        try
+        {
+            var root = await BenchmarkCommand.RunAsync(
+                await File.ReadAllTextAsync(suitePath, cancellationToken).ConfigureAwait(false),
+                resume,
+                endpoint,
+                CliVersion(),
+                RunBenchCaseAsync,
+                cancellationToken).ConfigureAwait(false);
+            Console.WriteLine(root);
+            return ExitCodes.Success;
+        }
+        catch (InvalidOperationException exception)
+        {
+            Console.Error.WriteLine(exception.Message);
+            return ExitCodes.ConfigError;
+        }
+    }
+
+    private static async Task RunBenchCaseAsync(GenerateRequest request, decimal? budget, CancellationToken cancellationToken)
+    {
+        var settings = new RunSettings
+        {
+            Profile = request.Profile,
+            OutputDirectory = request.OutputDirectory,
+            ModelStrong = request.ModelStrong,
+            ModelCheap = request.ModelCheap,
+            Endpoint = request.Endpoint,
+            Security = request.Security,
+            Temperature = request.Temperature,
+            AutoApprove = true,
+            ToolVersion = request.ToolVersion,
+            MonthlyBudgetUsd = budget,
+        };
+        using var host = CreateHost(settings);
+        if (host is null)
+        {
+            throw new InvalidOperationException("The benchmark host could not be created.");
+        }
+
+        await host.Services.GetRequiredService<PipelineRunner>().RunAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
     private static bool TryCompose(SettingsOverlay command, out RunSettings settings, out string? error)

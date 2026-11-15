@@ -62,6 +62,12 @@ dotnet run --project src/IacAgent.Cli -- review --plan plan.json
 
 `review` redacts the plan, runs Checkov on the Terraform next to it (`--source` overrides that directory), and asks the cheap model to explain the findings. A secret in the plan is replaced with `[redacted]` before it reaches the model or the console.
 
+```text
+dotnet run --project src/IacAgent.Cli -- bench --suite benchmarks/hello-suite.json
+```
+
+`bench` runs every combination in the suite, one at a time, and writes `results.csv`. It exits `0` when the suite finishes, including when individual runs fail. `--resume <folder>` continues a suite and skips a combination that already has `run.json`. An invalid suite file exits `20`.
+
 Exit codes: `0` success, `10` gate failure, `11` budget exceeded, `12` needs a human, `20` configuration or a missing prerequisite, `1` unexpected error.
 
 ## Extending

@@ -9,12 +9,14 @@ internal static class CliCommands
     public static RootCommand Create(
         Func<ParseResult, CancellationToken, Task<int>> generate,
         Func<ParseResult, CancellationToken, Task<int>> doctor,
-        Func<ParseResult, CancellationToken, Task<int>> review)
+        Func<ParseResult, CancellationToken, Task<int>> review,
+        Func<ParseResult, CancellationToken, Task<int>> bench)
     {
         var root = new RootCommand("Generate AWS Terraform from a prompt. Agents propose code. Gates accept it.");
         root.Subcommands.Add(CreateGenerate(generate));
         root.Subcommands.Add(CreateDoctor(doctor));
         root.Subcommands.Add(CreateReview(review));
+        root.Subcommands.Add(CreateBench(bench));
         return root;
     }
 
@@ -65,6 +67,15 @@ internal static class CliCommands
         return (parseResult.GetValue(Find<string>(command, "--plan")), ReadString(parseResult, Find<string>(command, "--source")));
     }
 
+    public static (string? Suite, string? Resume, string? Endpoint) ReadBench(ParseResult parseResult)
+    {
+        var command = (Command)parseResult.CommandResult.Command;
+        return (
+            ReadString(parseResult, Find<string>(command, "--suite")),
+            ReadString(parseResult, Find<string>(command, "--resume")),
+            ReadString(parseResult, Find<string>(command, "--endpoint")));
+    }
+
     public static string ReadPrompt(ParseResult parseResult)
     {
         var command = (Command)parseResult.CommandResult.Command;
@@ -101,6 +112,16 @@ internal static class CliCommands
         command.Options.Add(new Option<string>("--endpoint") { Description = "Local model server. Omit this to use OpenRouter." });
         command.Options.Add(new Option<bool>("--verbose") { Description = "Write debug logs." });
         command.SetAction((parseResult, cancellationToken) => review(parseResult, cancellationToken));
+        return command;
+    }
+
+    private static Command CreateBench(Func<ParseResult, CancellationToken, Task<int>> bench)
+    {
+        var command = new Command("bench", "Run a benchmark suite and write results.csv.");
+        command.Options.Add(new Option<string>("--suite") { Description = "Suite JSON file.", Required = true });
+        command.Options.Add(new Option<string>("--resume") { Description = "Suite folder to continue. Skips combinations that already have run.json." });
+        command.Options.Add(new Option<string>("--endpoint") { Description = "Local model server. Omit this to use OpenRouter." });
+        command.SetAction((parseResult, cancellationToken) => bench(parseResult, cancellationToken));
         return command;
     }
 
