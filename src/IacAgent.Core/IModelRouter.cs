@@ -13,4 +13,7 @@ public interface IModelRouter
 
     /// <summary>Returns chat options for this run. Temperature is null when the run sends none.</summary>
     ChatOptions CreateChatOptions();
+
+    /// <summary>Estimates USD from the price table. Null when this model id has no price.</summary>
+    decimal? EstimateCostUsd(string modelId, int inputTokens, int outputTokens);
 }

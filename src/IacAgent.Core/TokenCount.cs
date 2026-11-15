@@ -1,6 +1,6 @@
 namespace IacAgent.Core;
 
-/// <summary>Input and output token counts, plus a provider cost when the client reports one.</summary>
+/// <summary>Input and output token counts, plus a USD cost when one is known.</summary>
 public sealed record TokenCount(int Input, int Output, decimal? CostUsd = null)
 {
     /// <summary>Adds another count. A missing cost stays missing until one side has a cost.</summary>

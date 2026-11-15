@@ -91,6 +91,33 @@ public sealed class AgentsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task Developer_PriceTable_FillsCostWhenTheProviderOmitsIt()
+    {
+        var client = new ScriptedChatClient("""{"files":[{"path":"main.tf","content":"ok\n"}]}""");
+        using var provider = CreateProvider(client, estimatedCost: 0.42m);
+        var developer = Profile(provider, "trio").Agents.Single(agent => agent.Role == AgentRole.Developer);
+
+        var result = await developer.RunAsync(new AgentContext("hello", true), CancellationToken.None);
+
+        Assert.Equal(0.42m, result.Tokens!.CostUsd);
+    }
+
+    [Fact]
+    public async Task Developer_ReportedCost_WinsOverThePriceTable()
+    {
+        var client = new ScriptedChatClient("""{"files":[{"path":"main.tf","content":"ok\n"}]}""")
+        {
+            ReportedCost = 2,
+        };
+        using var provider = CreateProvider(client, estimatedCost: 0.42m);
+        var developer = Profile(provider, "trio").Agents.Single(agent => agent.Role == AgentRole.Developer);
+
+        var result = await developer.RunAsync(new AgentContext("hello", true), CancellationToken.None);
+
+        Assert.Equal(2m, result.Tokens!.CostUsd);
+    }
+
+    [Fact]
     public async Task Developer_TemperatureNone_SendsNull()
     {
         var client = new ScriptedChatClient("""{"files":[{"path":"main.tf","content":"ok\n"}]}""");
@@ -164,16 +191,16 @@ public sealed class AgentsServiceCollectionExtensionsTests
         return provider.GetServices<IProfileDefinition>().Single(definition => definition.Name == name).Build(provider);
     }
 
-    private static ServiceProvider CreateProvider(IChatClient client, IUserInteraction? interaction = null, float? temperature = null)
+    private static ServiceProvider CreateProvider(IChatClient client, IUserInteraction? interaction = null, float? temperature = null, decimal? estimatedCost = null)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IModelRouter>(new FixedRouter(client, temperature));
+        services.AddSingleton<IModelRouter>(new FixedRouter(client, temperature, estimatedCost));
         services.AddSingleton(interaction ?? new RecordingInteraction());
         services.AddAgents(new ConfigurationBuilder().Build());
         return services.BuildServiceProvider();
     }
 
-    private sealed class FixedRouter(IChatClient client, float? temperature = null) : IModelRouter
+    private sealed class FixedRouter(IChatClient client, float? temperature = null, decimal? estimatedCost = null) : IModelRouter
     {
         public IChatClient GetClient(ModelTier tier)
         {
@@ -188,6 +215,11 @@ public sealed class AgentsServiceCollectionExtensionsTests
         public ChatOptions CreateChatOptions()
         {
             return new ChatOptions { Temperature = temperature };
+        }
+
+        public decimal? EstimateCostUsd(string modelId, int inputTokens, int outputTokens)
+        {
+            return estimatedCost;
         }
     }
 
@@ -227,13 +259,22 @@ public sealed class AgentsServiceCollectionExtensionsTests
 
         public ChatOptions? LastOptions { get; private set; }
 
+        public long? ReportedCost { get; set; }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             LastUser = messages.Last().Text;
             LastOptions = options;
             var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, _responses.Dequeue()))
             {
-                Usage = new UsageDetails { InputTokenCount = 2, OutputTokenCount = 3 },
+                Usage = new UsageDetails
+                {
+                    InputTokenCount = 2,
+                    OutputTokenCount = 3,
+                    AdditionalCounts = ReportedCost is { } cost
+                        ? new AdditionalPropertiesDictionary<long>(new Dictionary<string, long> { ["cost"] = cost })
+                        : null,
+                },
             };
             return Task.FromResult(response);
         }

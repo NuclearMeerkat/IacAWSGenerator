@@ -34,6 +34,19 @@ Command flags override environment variables, which override `iacagent.json` in 
 
 The API key is only `OPENROUTER_API_KEY`. It is not read from the JSON file or from a flag.
 
+`pricing` in `iacagent.json` is USD per one million tokens, keyed by the exact model id. A run uses it when the provider does not report a cost. A model missing from the table leaves `costUsd` out of `run.json`. A negative or missing rate is a configuration error (exit code 20).
+
+```json
+{
+  "pricing": {
+    "provider/model": {
+      "inputPerMillion": 0.2,
+      "outputPerMillion": 0.8
+    }
+  }
+}
+```
+
 ## Commands
 
 ```text

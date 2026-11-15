@@ -55,7 +55,12 @@ public static class Application
             return ExitCodes.ConfigError;
         }
 
-        using var host = BuildHost(settings);
+        using var host = CreateHost(settings);
+        if (host is null)
+        {
+            return ExitCodes.ConfigError;
+        }
+
         var runner = host.Services.GetRequiredService<PipelineRunner>();
         var result = await runner.RunAsync(
             new GenerateRequest(
@@ -85,7 +90,12 @@ public static class Application
             return ExitCodes.ConfigError;
         }
 
-        using var host = BuildHost(settings);
+        using var host = CreateHost(settings);
+        if (host is null)
+        {
+            return ExitCodes.ConfigError;
+        }
+
         var doctor = host.Services.GetRequiredService<IacAgent.Host.Doctor.Doctor>();
         var report = await doctor.CheckAsync(
             new IacAgent.Host.Doctor.DoctorRequest(SettingsLoader.HasOpenRouterApiKey(), settings.Endpoint),
@@ -120,7 +130,12 @@ public static class Application
             return ExitCodes.ConfigError;
         }
 
-        using var host = BuildHost(settings);
+        using var host = CreateHost(settings);
+        if (host is null)
+        {
+            return ExitCodes.ConfigError;
+        }
+
         var reviewer = host.Services.GetRequiredService<PlanReviewer>();
         try
         {
@@ -155,6 +170,19 @@ public static class Application
         settings = RunSettingsComposer.Compose(file, environment, command);
         error = RunSettingsComposer.Validate(settings);
         return error is null;
+    }
+
+    private static IHost? CreateHost(RunSettings settings)
+    {
+        try
+        {
+            return BuildHost(settings);
+        }
+        catch (InvalidOperationException exception)
+        {
+            Console.Error.WriteLine(exception.Message);
+            return null;
+        }
     }
 
     private static IHost BuildHost(RunSettings settings)

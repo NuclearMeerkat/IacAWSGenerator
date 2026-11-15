@@ -14,7 +14,9 @@ internal static class ChatText
         string userPrompt,
         IEnumerable<IRedactionRule> rules,
         ChatOptions? options,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IModelRouter router,
+        string modelId)
     {
         var redacted = userPrompt;
         foreach (var rule in rules)
@@ -28,7 +30,8 @@ internal static class ChatText
             cancellationToken).ConfigureAwait(false);
         var input = (int)(response.Usage?.InputTokenCount ?? 0);
         var output = (int)(response.Usage?.OutputTokenCount ?? 0);
-        return (response.Text ?? string.Empty, new TokenCount(input, output, ReadCost(response.Usage)));
+        var cost = ReadCost(response.Usage) ?? router.EstimateCostUsd(modelId, input, output);
+        return (response.Text ?? string.Empty, new TokenCount(input, output, cost));
     }
 
     private static decimal? ReadCost(UsageDetails? usage)

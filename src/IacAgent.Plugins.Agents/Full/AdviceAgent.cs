@@ -18,7 +18,15 @@ internal class AdviceAgent(IModelRouter router, IEnumerable<IRedactionRule> rule
     {
         ArgumentNullException.ThrowIfNull(context);
         var user = string.IsNullOrWhiteSpace(context.RequirementsJson) ? context.Prompt : context.RequirementsJson;
-        var (text, tokens) = await ChatText.CompleteAsync(router.GetClient(tier), _prompt, user, rules, router.CreateChatOptions(), cancellationToken).ConfigureAwait(false);
+        var (text, tokens) = await ChatText.CompleteAsync(
+            router.GetClient(tier),
+            _prompt,
+            user,
+            rules,
+            router.CreateChatOptions(),
+            cancellationToken,
+            router,
+            router.GetModelId(tier)).ConfigureAwait(false);
         return new AgentResult([], Review: text.Trim(), Tokens: tokens);
     }
 }

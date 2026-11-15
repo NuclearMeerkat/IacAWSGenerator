@@ -47,7 +47,7 @@ Every `iacagent generate` run writes `run.json` in the output directory, includi
 | resources | Top-level `resource` blocks in the final `.tf` files. Commented-out blocks and `data` blocks are not counted. |
 | assumptions | Notes collected from agents. |
 | outcome | `Succeeded`, `GateFailed`, `BudgetExceeded`, `NeedsHuman`, `ConfigError`, `Error`, or `Cancelled`. `BudgetExceeded` means the Infracost estimate is above `--budget`. A token limit stops as `GateFailed` unless every remaining issue is that budget rule. `Error` and `Cancelled` are written when the run throws or the caller cancels, and the exception still propagates. The readable explanation of a gate stop is in `escalation.md`. |
-| costUsd | Provider-reported cost in USD for the run, when the chat client supplies `cost` in usage counts. Omitted otherwise. |
+| costUsd | USD for the run. A provider `cost` count wins when the chat client supplies one. Otherwise each call is priced from the `pricing` table in `iacagent.json` for that model id. Omitted when the provider sends no cost and the model has no price. |
 | error | First line of the exception message when the outcome is `Error` or `Cancelled`. Omitted otherwise. Secrets are redacted. |
 
 Secret values are not written. The OpenRouter API key is read only from `OPENROUTER_API_KEY` and is not a field in this file.

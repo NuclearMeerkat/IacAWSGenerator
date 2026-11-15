@@ -57,6 +57,11 @@ public sealed class PlanReviewerTests
         {
             return new Microsoft.Extensions.AI.ChatOptions();
         }
+
+        public decimal? EstimateCostUsd(string modelId, int inputTokens, int outputTokens)
+        {
+            return null;
+        }
     }
 
     private sealed class EchoChatClient : IChatClient

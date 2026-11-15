@@ -10,7 +10,7 @@ using OpenAI.Chat;
 namespace IacAgent.Plugins.Models;
 
 /// <summary>Selects OpenRouter, Ollama, or another OpenAI-compatible server.</summary>
-internal sealed class ModelRouter(ModelConnection connection) : IModelRouter
+internal sealed class ModelRouter(ModelConnection connection, PriceTable prices) : IModelRouter
 {
     private const string OpenRouterEndpoint = "https://openrouter.ai/api/v1";
 
@@ -24,6 +24,12 @@ internal sealed class ModelRouter(ModelConnection connection) : IModelRouter
     public ChatOptions CreateChatOptions()
     {
         return new ChatOptions { Temperature = connection.Temperature };
+    }
+
+    /// <inheritdoc />
+    public decimal? EstimateCostUsd(string modelId, int inputTokens, int outputTokens)
+    {
+        return prices.CostUsd(modelId, inputTokens, outputTokens);
     }
 
     /// <inheritdoc />

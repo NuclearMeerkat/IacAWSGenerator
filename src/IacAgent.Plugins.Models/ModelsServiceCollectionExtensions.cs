@@ -13,6 +13,7 @@ public static class ModelsServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+        services.AddSingleton(PriceTable.Bind(configuration));
         services.AddSingleton<IModelRouter, ModelRouter>();
         return services;
     }
