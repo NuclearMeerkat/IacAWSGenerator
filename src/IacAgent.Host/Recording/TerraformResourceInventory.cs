@@ -28,6 +28,24 @@ internal static partial class TerraformResourceInventory
         return new Result(counts.Values.Sum(), counts);
     }
 
+    /// <summary>One line: the path, then each <c>type.name</c> the file declares.</summary>
+    public static string Describe(GeneratedFile file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        if (!file.RelativePath.EndsWith(".tf", StringComparison.OrdinalIgnoreCase))
+        {
+            return file.RelativePath;
+        }
+
+        var names = new List<string>();
+        foreach (Match match in ResourceDeclaration().Matches(StripComments(file.Content)))
+        {
+            names.Add(match.Groups["type"].Value + "." + match.Groups["name"].Value);
+        }
+
+        return names.Count == 0 ? file.RelativePath : file.RelativePath + ": " + string.Join(", ", names);
+    }
+
     private static string StripComments(string text)
     {
         var withoutBlocks = BlockComment().Replace(text, string.Empty);

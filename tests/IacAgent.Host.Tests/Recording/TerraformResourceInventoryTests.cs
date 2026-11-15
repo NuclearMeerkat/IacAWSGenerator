@@ -31,4 +31,18 @@ public sealed class TerraformResourceInventoryTests
         Assert.False(inventory.Types.ContainsKey("aws_vpc"));
         Assert.False(inventory.Types.ContainsKey("aws_ami"));
     }
+
+    [Fact]
+    public void Describe_ListsResourceNamesAndSkipsComments()
+    {
+        var file = new GeneratedFile("variables.tf", """
+            resource "aws_s3_bucket" "data" {}
+            # resource "aws_vpc" "commented" {}
+            data "aws_ami" "ubuntu" {}
+            resource "aws_iam_role" "reader" {}
+            """);
+
+        Assert.Equal("variables.tf: aws_s3_bucket.data, aws_iam_role.reader", TerraformResourceInventory.Describe(file));
+        Assert.Equal("lambda.py", TerraformResourceInventory.Describe(new GeneratedFile("lambda.py", "resource \"aws_s3_bucket\" \"ignored\" {}")));
+    }
 }

@@ -79,6 +79,34 @@ public sealed class AgentsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task Developer_RepairMessage_ListsOtherFilesAndDesignNotes()
+    {
+        var client = new ScriptedChatClient("""{"files":[{"path":"main.tf","content":"ok\n"}]}""");
+        using var provider = CreateProvider(client);
+        var developer = Profile(provider, "trio").Agents.Single(agent => agent.Role == AgentRole.Developer);
+        var context = new AgentContext(
+            "hello",
+            true,
+            """{"summary":"api"}""",
+            new Artifact("out", [new GeneratedFile("main.tf", "resource \"aws_s3_bucket\" \"bad\" {}\n")]),
+            [new GateResult("validate", false, [new GateIssue("main.tf", 1, "terraform-validate", "error", "broken")])],
+            ["variables.tf: aws_s3_bucket.data"],
+            "Use one bucket.");
+
+        await developer.RunAsync(context, CancellationToken.None);
+
+        var notes = client.LastUser!.IndexOf("Design notes:", StringComparison.Ordinal);
+        var requirements = client.LastUser.IndexOf("\"summary\"", StringComparison.Ordinal);
+        var other = client.LastUser.IndexOf("Other files:", StringComparison.Ordinal);
+        Assert.True(requirements >= 0 && requirements < notes);
+        Assert.True(notes < other);
+        Assert.Contains("Use one bucket.", client.LastUser, StringComparison.Ordinal);
+        Assert.Contains("variables.tf: aws_s3_bucket.data", client.LastUser, StringComparison.Ordinal);
+        Assert.Contains("resource \"aws_s3_bucket\" \"bad\"", client.LastUser, StringComparison.Ordinal);
+        Assert.DoesNotContain("File variables.tf:", client.LastUser, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Developer_Temperature_ReachesTheChatClient()
     {
         var client = new ScriptedChatClient("""{"files":[{"path":"main.tf","content":"ok\n"}]}""");

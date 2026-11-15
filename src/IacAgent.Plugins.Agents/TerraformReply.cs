@@ -13,6 +13,7 @@ internal static class TerraformReply
     {
         var builder = new StringBuilder();
         builder.AppendLine(context.RequirementsJson ?? context.Prompt);
+        AppendDesignNotes(builder, context.DesignNotes);
         if (context.GateResults is null)
         {
             return builder.ToString();
@@ -40,7 +41,35 @@ internal static class TerraformReply
             }
         }
 
+        AppendOtherFiles(builder, context.OtherFiles);
         return builder.ToString();
+    }
+
+    private static void AppendDesignNotes(StringBuilder builder, string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes))
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("Design notes:");
+        builder.AppendLine(notes.Trim());
+    }
+
+    private static void AppendOtherFiles(StringBuilder builder, IReadOnlyList<string>? otherFiles)
+    {
+        if (otherFiles is null || otherFiles.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("Other files:");
+        foreach (var line in otherFiles)
+        {
+            builder.AppendLine(line);
+        }
     }
 
     public static async Task<AgentResult> WriteAsync(

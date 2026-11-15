@@ -325,6 +325,53 @@ public sealed class RepairLoopTests
     }
 
     [Fact]
+    public async Task RunAsync_AdvisorReview_StaysOutOfRequirements()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var developer = new ContextDeveloper();
+            var runner = CreateRunner(
+                developer,
+                new PassingGate(),
+                orchestrator: new JsonOrchestrator(),
+                advisor: new NoteAdvisor("Use one bucket."));
+            await runner.RunAsync(Request(directory, maxRepairs: 0), CancellationToken.None);
+
+            var context = Assert.Single(developer.Seen);
+            Assert.Equal("""{"summary":"api"}""", context.RequirementsJson);
+            Assert.Equal("Use one bucket.", context.DesignNotes);
+            Assert.Null(context.OtherFiles);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RunAsync_Repair_ListsOtherFilesWithoutTheirContent()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var developer = new TwoFileDeveloper();
+            var runner = CreateRunner(developer, new MainFileGate());
+            await runner.RunAsync(Request(directory, maxRepairs: 1), CancellationToken.None);
+
+            var repair = developer.Seen[1];
+            var line = Assert.Single(repair.OtherFiles!);
+            Assert.Equal("variables.tf: aws_s3_bucket.data", line);
+            Assert.DoesNotContain(repair.Artifact!.Files, file => file.RelativePath == "variables.tf");
+            Assert.DoesNotContain("keep-me-out", repair.Artifact.Files[0].Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_Secrets_AreRedactedFromRunJsonAndEscalation()
     {
         var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
@@ -357,12 +404,18 @@ public sealed class RepairLoopTests
         IEnumerable<IRedactionRule>? rules = null,
         IModelRouter? router = null,
         IAgent? reviewer = null,
-        IAgent? orchestrator = null)
+        IAgent? orchestrator = null,
+        IAgent? advisor = null)
     {
         var agents = new List<IAgent>();
         if (orchestrator is not null)
         {
             agents.Add(orchestrator);
+        }
+
+        if (advisor is not null)
+        {
+            agents.Add(advisor);
         }
 
         agents.Add(developer);
@@ -693,6 +746,78 @@ public sealed class RepairLoopTests
         public Task<GateResult> CheckAsync(Artifact artifact, CancellationToken cancellationToken)
         {
             return Task.FromResult(new GateResult(Name, true, [new GateIssue("main.tf", 1, "CKV_AWS_1", "LOW", "tag", false)]));
+        }
+    }
+
+    private sealed class ContextDeveloper : IAgent
+    {
+        public List<AgentContext> Seen { get; } = [];
+
+        public string Name => "context";
+
+        public AgentRole Role => AgentRole.Developer;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            Seen.Add(context);
+            return Task.FromResult(new AgentResult([], Files: [new GeneratedFile("main.tf", "ok\n")]));
+        }
+    }
+
+    private sealed class JsonOrchestrator : IAgent
+    {
+        public string Name => "orchestrator";
+
+        public AgentRole Role => AgentRole.Orchestrator;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AgentResult([], RequirementsJson: """{"summary":"api"}"""));
+        }
+    }
+
+    private sealed class NoteAdvisor(string note) : IAgent
+    {
+        public string Name => "architect";
+
+        public AgentRole Role => AgentRole.Advisor;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AgentResult([], Review: note));
+        }
+    }
+
+    private sealed class TwoFileDeveloper : IAgent
+    {
+        private int _calls;
+
+        public List<AgentContext> Seen { get; } = [];
+
+        public string Name => "two-file";
+
+        public AgentRole Role => AgentRole.Developer;
+
+        public Task<AgentResult> RunAsync(AgentContext context, CancellationToken cancellationToken)
+        {
+            _calls++;
+            Seen.Add(context);
+            IReadOnlyList<GeneratedFile> files = _calls == 1
+                ? [new GeneratedFile("main.tf", "resource \"aws_s3_bucket\" \"bad\" {}\n"), new GeneratedFile("variables.tf", "resource \"aws_s3_bucket\" \"data\" {}\nkeep-me-out\n")]
+                : [new GeneratedFile("main.tf", "resource \"aws_s3_bucket\" \"bad\" {}\n")];
+            return Task.FromResult(new AgentResult([], Files: files));
+        }
+    }
+
+    private sealed class MainFileGate : IGate
+    {
+        public string Name => "main-only";
+
+        public int Order => 1;
+
+        public Task<GateResult> CheckAsync(Artifact artifact, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new GateResult(Name, false, [new GateIssue("main.tf", 1, "rule", "HIGH", "bad")]));
         }
     }
 

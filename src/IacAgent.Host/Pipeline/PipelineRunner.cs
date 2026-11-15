@@ -114,15 +114,16 @@ public sealed class PipelineRunner
             return await StopOpeningAsync(workspace, outputDirectory, assumptions, recorder, opening, cancellationToken).ConfigureAwait(false);
         }
 
-        var (requirements, tokens) = await RunAdvisorsAsync(profile, request, opening.Requirements, assumptions, opening.Tokens, cancellationToken).ConfigureAwait(false);
+        var advised = await RunAdvisorsAsync(profile, request, opening.Requirements, assumptions, opening.Tokens, cancellationToken).ConfigureAwait(false);
         var repair = await new RepairLoop(_gates, _logger, _rules).RunAsync(
             profile,
             request,
             workspace,
-            requirements,
+            advised.Requirements,
+            advised.DesignNotes,
             assumptions,
             recorder,
-            tokens,
+            advised.Tokens,
             loop,
             cancellationToken).ConfigureAwait(false);
         recorder.AddAssumptions(assumptions);
@@ -205,7 +206,7 @@ public sealed class PipelineRunner
         return new Opening(requirements, tokens, false, false, null);
     }
 
-    private async Task<(string? Requirements, TokenCount Tokens)> RunAdvisorsAsync(
+    private async Task<(string? Requirements, string? DesignNotes, TokenCount Tokens)> RunAdvisorsAsync(
         PipelineProfile profile,
         GenerateRequest request,
         string? requirements,
@@ -213,6 +214,7 @@ public sealed class PipelineRunner
         TokenCount tokens,
         CancellationToken cancellationToken)
     {
+        var notes = new List<string>();
         foreach (var agent in profile.Agents.Where(agent => agent.Role == AgentRole.Advisor))
         {
             _logger.LogInformation("Running agent {Agent}.", agent.Name);
@@ -223,13 +225,12 @@ public sealed class PipelineRunner
             tokens = Add(tokens, result.Tokens);
             if (!string.IsNullOrWhiteSpace(result.Review))
             {
-                requirements = string.IsNullOrWhiteSpace(requirements)
-                    ? result.Review
-                    : requirements + "\n\n" + result.Review;
+                notes.Add(result.Review.Trim());
             }
         }
 
-        return (requirements, tokens);
+        var designNotes = notes.Count == 0 ? null : string.Join("\n\n", notes);
+        return (requirements, designNotes, tokens);
     }
 
     private static LoopPolicy EffectiveLoop(GenerateRequest request, PipelineProfile profile)

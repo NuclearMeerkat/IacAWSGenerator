@@ -14,6 +14,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         GenerateRequest request,
         string outputDirectory,
         string? requirements,
+        string? designNotes,
         List<string> assumptions,
         RunRecorder recorder,
         TokenCount openingTokens,
@@ -24,7 +25,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         var state = new RepairState([], [], null, 0, openingTokens, []);
         while (true)
         {
-            var turn = await AskDeveloperAsync(developers, request, outputDirectory, requirements, assumptions, state, cancellationToken).ConfigureAwait(false);
+            var turn = await AskDeveloperAsync(developers, request, outputDirectory, requirements, designNotes, assumptions, state, cancellationToken).ConfigureAwait(false);
             state = await WriteAndCheckAsync(outputDirectory, state, turn, cancellationToken).ConfigureAwait(false);
             RecordIteration(recorder, state, turn.IterationTokens, openingTokens);
             var next = DecideNext(state, loop);
@@ -49,17 +50,19 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         GenerateRequest request,
         string outputDirectory,
         string? requirements,
+        string? designNotes,
         List<string> assumptions,
         RepairState state,
         CancellationToken cancellationToken)
     {
-        var failing = state.Repairs == 0 ? null : FailingFiles(state.Files, state.LastResults);
-        var context = new AgentContext(
-            request.Prompt,
-            request.AutoApprove,
+        var context = RepairContext.ForDeveloper(
+            request,
+            outputDirectory,
             requirements,
-            failing is null ? null : new Artifact(outputDirectory, failing),
-            state.Repairs == 0 ? null : state.LastResults);
+            designNotes,
+            state.Files,
+            state.LastResults,
+            state.Repairs);
         var iteration = new TokenCount(0, 0);
         var tokens = state.Tokens;
         var files = state.Files;
@@ -247,18 +250,6 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
     private static bool OverTokenLimit(LoopPolicy loop, TokenCount tokens)
     {
         return loop.MaxTotalTokens is not null && tokens.Input + tokens.Output > loop.MaxTotalTokens.Value;
-    }
-
-    private static IReadOnlyList<GeneratedFile> FailingFiles(IReadOnlyList<GeneratedFile> files, IReadOnlyList<GateResult> results)
-    {
-        var names = results.SelectMany(result => result.Issues).Where(issue => issue.IsBlocking).Select(issue => issue.File).Where(file => !string.IsNullOrWhiteSpace(file)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (names.Count == 0)
-        {
-            return files;
-        }
-
-        var matched = files.Where(file => names.Contains(file.RelativePath) || names.Contains(Path.GetFileName(file.RelativePath))).ToList();
-        return matched.Count == 0 ? files : matched;
     }
 
     private static TokenCount Add(TokenCount current, TokenCount? addition)
