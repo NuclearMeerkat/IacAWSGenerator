@@ -14,4 +14,6 @@ The OpenAI .NET client 2.14 maps chat usage to token counts only. `ChatTokenUsag
 
 Formatting is a deterministic normalization: `terraform fmt` rewrites the files, and the gate still decides. A syntax error remains a blocking issue. A formatting difference does not spend a repair.
 
+The orchestrator dialogue is bounded to three follow-up rounds and only runs when the user can be prompted, so benchmark runs are not affected.
+
 Checkov findings are blocking or advisory. The host policy decides, because free Checkov leaves severity empty. `baseline` blocks only holes that are fixed by changing an attribute: open SSH or RDP, all ports open to the world, IAM admin policies, public S3 access, and encryption or public-access flags. Extra hardening stays advisory, so the developer does not add a VPC, a KMS key, or a code-signing resource to silence it. `strict` blocks every failed check except a skip list. An inline `checkov:skip` does not hide a blocking check.

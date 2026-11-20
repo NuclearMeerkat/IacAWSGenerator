@@ -29,7 +29,7 @@ Command flags override environment variables, which override `iacagent.json` in 
 | `--security` | `IACAGENT_SECURITY` | Checkov policy: `baseline` or `strict`. Default `baseline`. |
 | `--temperature` | `IACAGENT_TEMPERATURE` | Model temperature from `0` to `2`, or `none`. Default `0.2`. |
 | `--budget` | `IACAGENT_BUDGET` | Maximum estimated cost in USD per month. Omit it to skip Infracost. |
-| `--auto-approve` | `IACAGENT_AUTO_APPROVE` | Skip interactive questions. |
+| `--auto-approve` | `IACAGENT_AUTO_APPROVE` | Skip interactive questions. Without it, the orchestrator can ask follow-ups. Press Enter to accept a default. It stops after three follow-up rounds. |
 | `--verbose` | `IACAGENT_VERBOSE` | Debug logs. |
 
 The API key is only `OPENROUTER_API_KEY`. It is not read from the JSON file or from a flag.

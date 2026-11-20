@@ -9,12 +9,22 @@ namespace IacAgent.Plugins.Agents.Tests;
 
 internal static class AgentTestHost
 {
-    public static AgentTestScope Open(IChatClient client, IUserInteraction? interaction = null, float? temperature = null, decimal? estimatedCost = null)
+    public static AgentTestScope Open(
+        IChatClient client,
+        IUserInteraction? interaction = null,
+        float? temperature = null,
+        decimal? estimatedCost = null,
+        IEnumerable<IRedactionRule>? rules = null)
     {
         var router = new FixedRouter(client, temperature, estimatedCost);
         var services = new ServiceCollection();
         services.AddSingleton<IModelRouter>(router);
         services.AddSingleton(interaction ?? new RecordingInteraction());
+        foreach (var rule in rules ?? [])
+        {
+            services.AddSingleton(rule);
+        }
+
         services.AddAgents(new ConfigurationBuilder().Build());
         return new AgentTestScope(services.BuildServiceProvider(), router);
     }
@@ -95,13 +105,19 @@ internal sealed class ScriptedChatClient(params string[] responses) : IChatClien
 
     public string? LastUser { get; private set; }
 
+    public List<string> Users { get; } = [];
+
+    public int Calls { get; private set; }
+
     public ChatOptions? LastOptions { get; private set; }
 
     public long? ReportedCost { get; set; }
 
     public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
+        Calls++;
         LastUser = messages.Last().Text;
+        Users.Add(LastUser);
         LastOptions = options;
         var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, _responses.Dequeue()))
         {

@@ -302,7 +302,7 @@ Interactive questions (Spectre.Console prompts) MUST be skipped when `--auto-app
 ### Flow for `generate`
 
 1. Load config and select the profile.
-2. **Orchestrator** agents turn the prompt into structured requirements (JSON). They may ask clarifying questions (unless `--auto-approve`). If an orchestrator fails, the run stops with `GateFailed` and `escalation.md`.
+2. **Orchestrator** agents turn the prompt into structured requirements (JSON). They may ask clarifying questions unless `--auto-approve` is set or input is not a terminal. Each answer is sent back, and the model rewrites the requirements. An answer that asks for advice gets at most three sentences and one confirming question. The dialogue stops when nothing is open, every answer in a round is empty, prompting is impossible, or after 3 follow-up rounds. The last round tells the model to choose defaults. If an orchestrator fails, the run stops with `GateFailed` and `escalation.md`.
 3. **Advisor** agents (full profile: Architect, FinOps) add design notes once.
 4. **Developer** produces Terraform files as JSON: `{"files":[{"path":"main.tf","content":"..."}]}`. Parse strictly; if the JSON is invalid, ask the model once to fix the format, then fail the iteration.
 5. Files are written to the working directory. On a repair, returned files are merged over the previous set by path.
@@ -375,7 +375,7 @@ The Phase 0 attempt is in `docs/aot-notes.md` (blocked by a missing C++ linker).
 
 ## 10. Current state
 
-Section 11 is done. `generate`, `doctor`, `review`, and `bench` are on `main`. 105 tests pass, the build has no warnings, and `dotnet format` is clean.
+Steps 0–12 of section 11 are done; step 13 (Orchestrator clarification dialogue) is open. `generate`, `doctor`, `review`, and `bench` are on `main`. 105 tests pass, the build has no warnings, and `dotnet format` is clean.
 
 Working:
 
@@ -607,6 +607,49 @@ Still open:
 **Tests (Host):** fake profile and gate; the runner makes the expected number of runs, writes one CSV row per run, skips existing runs on resume, and continues after a run throws.
 
 **Done when:** `iacagent bench --suite benchmarks/hello-suite.json` with `repeat: 1` finishes and `results.csv` has one row per combination.
+
+---
+
+### Step 13 — Orchestrator clarification dialogue
+
+**Goal:** the user's answers change the requirements. When an answer is a question, a request for advice, or a change of direction, the Orchestrator replies with advice and asks a follow-up, until nothing is open or the round limit is reached.
+
+**Bug being fixed:** `OrchestratorAgent` asks its questions and then uses the requirements from the **same** reply, which already contain the defaults. Answers are only appended to `assumptions`, which the Developer never sees. In a real run, "page number" and "seed 20 products" were ignored and "What is better in our case?" got no reply.
+
+**Scope:** only `Plugins.Agents` (`Trio/OrchestratorAgent.cs`, `Prompts/Orchestrator.md`) and one line in `Cli/ConsoleUserInteraction.cs`. No Host or Core change. `--auto-approve`, non-interactive input, and `bench` must behave exactly as before: one model call, no questions.
+
+1. **Reply format.** Extend the Orchestrator JSON with an optional `advice` string:
+ `{"assumptions":[],"questions":[],"advice":"","needsHuman":false,"requirements":{...}}`.
+2. **Prompt (`Orchestrator.md`).** Add an input section `Conversation so far` (each question and the user's answer) and these rules:
+ - The user's answers override the defaults. Rewrite `requirements` and `assumptions` to match them.
+ - If an answer asks a question or for advice, answer it in `advice` (at most 3 sentences, with one clear recommendation and the reason) and ask one short confirming question, for example "Use one Lambda for all three routes? Press Enter to accept."
+ - If an answer changes direction ("use separate Lambdas", "add a POST endpoint"), update the requirements and ask only about what the change leaves open.
+ - Never repeat a question that already has an answer.
+ - When the input says `Final round: true`, return `questions: []` and choose defaults for anything still open.
+3. **Dialogue loop (`OrchestratorAgent`).** Keep `RunAsync` a short summary; put each step in a named method (`AskModelAsync`, `AskUserAsync`, `BuildFollowUpPrompt`).
+ - Round 0: the current call.
+ - While the reply has questions, auto-approve is off, and rounds remain: ask each question (show `advice` before the first question of the round), collect the answers, then call the model again with the original prompt plus the full conversation. That reply replaces the previous requirements, assumptions, and questions.
+ - Stop asking when the reply has no questions, every answer in a round is empty (the user accepts the defaults), or `AskAsync` returns `null` (cannot prompt).
+ - Round limit: a `private const int MaxClarificationRounds = 3` (no new setting). The last follow-up call carries `Final round: true`; questions in that reply are recorded as `Assumed a default for: …` and not asked.
+ - Every call goes through `ChatText.CompleteAsync` so the user's answers are redacted. An invalid JSON reply gets the existing one format retry, then the agent fails as today.
+ - `Tokens` is the sum of all calls in the dialogue.
+ - `needsHuman` is read from the **final** reply, with the current rule (`NeedsHuman` when auto-approve is on or a question stayed unanswered).
+4. **Assumptions.** Take them from the final reply. Add one line per exchange in the form `User was asked "<question>" and answered "<answer>".` so `run.json` documents the dialogue. Drop the old `"<question> <answer>"` lines.
+5. **Empty answer.** In `ConsoleUserInteraction`, use `new TextPrompt<string>(question).AllowEmpty()` so Enter means "accept the default". Return the trimmed text; an empty string is an answer, not `null`.
+6. **Docs.** Update section 7, flow step 2, to describe the dialogue and the round limit. Add one sentence to `docs/observations.md`: the dialogue is bounded and only runs interactively, so benchmark runs are not affected. Update `README.md` if it describes the questions.
+
+**Tests (Agents, `Trio/OrchestratorAgentTests`, fake `IChatClient` and fake `IUserInteraction`):**
+- `RunAsync_AutoApprove_MakesOneCallAndAsksNothing`
+- `RunAsync_UserAnswers_SecondCallContainsQuestionAndAnswer` and the final requirements come from the second reply
+- `RunAsync_AllAnswersEmpty_MakesNoFollowUpCall`
+- `RunAsync_ReplyWithAdvice_ShowsAdviceBeforeFollowUpQuestion`
+- `RunAsync_ModelKeepsAsking_StopsAfterRoundLimit` (at most 1 + 3 calls, last request contains `Final round: true`, leftover questions become assumptions)
+- `RunAsync_CannotPrompt_KeepsDefaultsAndMakesNoFollowUpCall`
+- `RunAsync_Dialogue_SumsTokensOfAllCalls`
+- `RunAsync_AnswerContainsSecret_RequestIsRedacted`
+- `RunAsync_InvalidFollowUpJson_FailsAfterOneFormatRetry`
+
+**Done when:** the sport-store prompt run interactively, with the answers "page number", "public", "What is better in our case?" (followed by Enter on the advice), and "yes, seed about 20 products", produces requirements and `main.tf` with page-number pagination and seeded items. The same prompt with `--auto-approve` still makes exactly one Orchestrator call.
 
 ---
 

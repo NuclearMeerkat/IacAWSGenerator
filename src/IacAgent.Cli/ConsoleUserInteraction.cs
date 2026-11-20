@@ -17,6 +17,7 @@ internal sealed class ConsoleUserInteraction : IUserInteraction
             return Task.FromResult<string?>(null);
         }
 
-        return Task.FromResult<string?>(AnsiConsole.Ask<string>(Markup.Escape(question)));
+        var prompt = new TextPrompt<string>(Markup.Escape(question)).AllowEmpty();
+        return Task.FromResult<string?>(AnsiConsole.Prompt(prompt).Trim());
     }
 }
