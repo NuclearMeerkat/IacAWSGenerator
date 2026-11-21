@@ -8,7 +8,7 @@ internal sealed class DeveloperAgent(IModelRouter router, IEnumerable<IRedaction
     private readonly string _prompt = ChatText.ReadPrompt("Developer.md");
 
     /// <inheritdoc />
-    public string Name => "developer";
+    public string Name => KnownGates.Developer;
 
     /// <inheritdoc />
     public AgentRole Role => AgentRole.Developer;

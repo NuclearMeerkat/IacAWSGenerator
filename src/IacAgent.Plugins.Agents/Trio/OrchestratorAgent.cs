@@ -13,7 +13,7 @@ internal sealed class OrchestratorAgent(IModelRouter router, IEnumerable<IRedact
     private readonly string _prompt = ChatText.ReadPrompt("Orchestrator.md");
 
     /// <inheritdoc />
-    public string Name => "orchestrator";
+    public string Name => KnownGates.Orchestrator;
 
     /// <inheritdoc />
     public AgentRole Role => AgentRole.Orchestrator;

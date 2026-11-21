@@ -82,6 +82,24 @@ public sealed class PipelineRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_UnknownProfile_DoesNotReadToolVersions()
+    {
+        var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
+        try
+        {
+            var processes = new CountingProcessRunner();
+            var runner = CreateRunner(new RecordingAgent([]), processes: processes);
+            await runner.RunAsync(Request(directory, null) with { Profile = "missing" }, CancellationToken.None);
+
+            Assert.Empty(processes.FileNames);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_Gates_RunInAscendingOrder()
     {
         var directory = Directory.CreateTempSubdirectory("iacagent-").FullName;
@@ -268,16 +286,38 @@ public sealed class PipelineRunnerTests
         }
     }
 
-    private static PipelineRunner CreateRunner(IAgent agent, IReadOnlyList<IGate>? gates = null, IEnumerable<IRedactionRule>? rules = null)
+    private static PipelineRunner CreateRunner(
+        IAgent agent,
+        IReadOnlyList<IGate>? gates = null,
+        IEnumerable<IRedactionRule>? rules = null,
+        IProcessRunner? processes = null)
     {
         var services = new ServiceCollection().BuildServiceProvider();
         var catalog = new ProfileCatalog([new FakeProfile("trio", agent)]);
-        return new PipelineRunner(catalog, gates ?? [], services, NullLogger<PipelineRunner>.Instance, new IdleRouter(), rules ?? [], new QuietProcessRunner());
+        return new PipelineRunner(
+            catalog,
+            gates ?? [],
+            services,
+            NullLogger<PipelineRunner>.Instance,
+            new IdleRouter(),
+            rules ?? [],
+            processes ?? new QuietProcessRunner());
     }
 
     private static GenerateRequest Request(string directory, string? endpoint)
     {
         return new GenerateRequest("hello", "trio", directory, "test-model", null, endpoint, 3, null, true);
+    }
+
+    private sealed class CountingProcessRunner : IProcessRunner
+    {
+        public List<string> FileNames { get; } = [];
+
+        public Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken)
+        {
+            FileNames.Add(fileName);
+            return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
+        }
     }
 
     private sealed class FakeProfile(string name, IAgent agent) : IProfileDefinition

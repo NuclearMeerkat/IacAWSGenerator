@@ -79,13 +79,14 @@ public sealed class PipelineRunner
         CancellationToken cancellationToken)
     {
         var profile = _catalog.Create(request.Profile, _services);
-        await RecordToolVersionsAsync(recorder, cancellationToken).ConfigureAwait(false);
         if (profile is null)
         {
             _logger.LogWarning("Profile {Profile} is not registered.", request.Profile);
             await recorder.WriteAsync(workspace, RunOutcome.ConfigError, cancellationToken).ConfigureAwait(false);
             return new PipelineResult(RunOutcome.ConfigError, outputDirectory);
         }
+
+        await RecordToolVersionsAsync(recorder, cancellationToken).ConfigureAwait(false);
 
         var loop = EffectiveLoop(request, profile);
         var provider = string.IsNullOrWhiteSpace(request.Endpoint) ? "openrouter" : "local";
@@ -248,9 +249,9 @@ public sealed class PipelineRunner
         var message = opening.FailureMessage ?? "The orchestrator failed.";
         var results = new GateResult[]
         {
-            new("orchestrator", false, [new GateIssue(string.Empty, null, "orchestrator", "error", message)]),
+            new(KnownGates.Orchestrator, false, [new GateIssue(string.Empty, null, KnownGates.Orchestrator, "error", message)]),
         };
-        recorder.RecordIteration(new IterationRecord(1, [new GateSummary("orchestrator", false, 1, 1)], opening.Tokens));
+        recorder.RecordIteration(new IterationRecord(1, [new GateSummary(KnownGates.Orchestrator, false, 1, 1)], opening.Tokens));
         recorder.AddAssumptions(assumptions);
         await EscalationReport.WriteAsync(workspace, RunOutcome.GateFailed, results, [], _rules, cancellationToken).ConfigureAwait(false);
         await recorder.WriteAsync(workspace, RunOutcome.GateFailed, cancellationToken).ConfigureAwait(false);

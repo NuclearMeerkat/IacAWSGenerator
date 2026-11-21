@@ -98,7 +98,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         if (turn.FailedWithoutFiles && state.Repairs > 0)
         {
             var failure = DeveloperFailure(turn.FailureMessage);
-            var kept = state.LastResults.Where(result => result.GateName != "developer").Append(failure).ToList();
+            var kept = state.LastResults.Where(result => result.GateName != KnownGates.Developer).Append(failure).ToList();
             return state with { Files = turn.Files, LastResults = kept, IterationResults = [failure], Tokens = turn.TotalTokens, GateDurations = [] };
         }
 
@@ -114,7 +114,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         }
 
         var measured = await RunGatesAsync(new Artifact(outputDirectory, turn.Files), cancellationToken).ConfigureAwait(false);
-        var files = Reload(outputDirectory, turn.Files);
+        var files = WorkspaceFiles.Read(outputDirectory, turn.Files);
         var results = measured.Select(pass => pass.Result).ToList();
         return state with
         {
@@ -124,24 +124,6 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
             Tokens = turn.TotalTokens,
             GateDurations = measured.Select(pass => pass.DurationMs).ToList(),
         };
-    }
-
-    private static IReadOnlyList<GeneratedFile> Reload(string directory, IReadOnlyList<GeneratedFile> files)
-    {
-        return files.Select(file => ReloadFile(directory, file)).ToList();
-    }
-
-    private static GeneratedFile ReloadFile(string directory, GeneratedFile file)
-    {
-        var relative = file.RelativePath.Replace('\\', '/').TrimStart('/');
-        var path = Path.GetFullPath(Path.Combine(directory, relative));
-        var root = Path.GetFullPath(directory + Path.DirectorySeparatorChar);
-        if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(path))
-        {
-            return file;
-        }
-
-        return file with { Content = File.ReadAllText(path) };
     }
 
     private static void RecordIteration(RunRecorder recorder, RepairState state, TokenCount iterationTokens, TokenCount openingTokens)
@@ -229,7 +211,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
     private static GateResult DeveloperFailure(string? failureMessage)
     {
         var message = failureMessage ?? "The developer returned no files.";
-        return new GateResult("developer", false, [new GateIssue(string.Empty, null, "developer-output", "error", message)]);
+        return new GateResult(KnownGates.Developer, false, [new GateIssue(string.Empty, null, "developer-output", "error", message)]);
     }
 
     private static RunOutcome FailureOutcome(IReadOnlyList<GateResult> results)
