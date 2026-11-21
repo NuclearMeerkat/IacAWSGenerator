@@ -1,4 +1,5 @@
 using IacAgent.Core;
+using IacAgent.Host.Redaction;
 
 namespace IacAgent.Host.Pipeline;
 
@@ -13,6 +14,7 @@ internal static class EscalationReport
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(directory);
+        var redactor = new Redactor(rules);
         var lines = new List<string>
         {
             "# Escalation",
@@ -47,7 +49,7 @@ internal static class EscalationReport
         foreach (var (gate, issue) in blocking)
         {
             var line = issue.Line?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-";
-            lines.Add($"- {gate} {issue.File}:{line} [{issue.Severity}] {issue.RuleId}: {Redact(issue.Message, rules)}");
+            lines.Add($"- {gate} {issue.File}:{line} [{issue.Severity}] {issue.RuleId}: {redactor.Redact(issue.Message)}");
         }
 
         lines.Add($"Advisory findings: {advisory}.");
@@ -63,20 +65,10 @@ internal static class EscalationReport
         {
             lines.Add(string.Empty);
             lines.Add($"### {file.RelativePath}");
-            lines.Add(Redact(file.Content, rules));
+            lines.Add(redactor.Redact(file.Content));
         }
 
         var path = Path.Combine(directory, "escalation.md");
         await File.WriteAllLinesAsync(path, lines, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static string Redact(string text, IEnumerable<IRedactionRule> rules)
-    {
-        foreach (var rule in rules)
-        {
-            text = rule.Redact(text);
-        }
-
-        return text;
     }
 }

@@ -97,7 +97,7 @@ public sealed class PipelineRunner
 
         var assumptions = new List<string>();
         var opening = await RunOrchestratorsAsync(profile, request, assumptions, cancellationToken).ConfigureAwait(false);
-        if (opening.NeedsHuman)
+        if (opening.Kind == OpeningKind.NeedsHuman)
         {
             recorder.RecordIteration(new IterationRecord(1, [], opening.Tokens));
             recorder.AddAssumptions(assumptions);
@@ -106,7 +106,7 @@ public sealed class PipelineRunner
             return new PipelineResult(RunOutcome.NeedsHuman, outputDirectory);
         }
 
-        if (opening.Failed)
+        if (opening.Kind == OpeningKind.Failed)
         {
             return await StopOpeningAsync(workspace, outputDirectory, assumptions, recorder, opening, cancellationToken).ConfigureAwait(false);
         }
@@ -186,12 +186,12 @@ public sealed class PipelineRunner
             if (result.Failed)
             {
                 assumptions.Add(result.FailureMessage ?? "The orchestrator failed.");
-                return new Opening(requirements, tokens, false, true, result.FailureMessage);
+                return new Opening(requirements, tokens, OpeningKind.Failed, result.FailureMessage);
             }
 
             if (result.NeedsHuman)
             {
-                return new Opening(requirements, tokens, true, false, result.FailureMessage);
+                return new Opening(requirements, tokens, OpeningKind.NeedsHuman, result.FailureMessage);
             }
 
             if (!string.IsNullOrWhiteSpace(result.RequirementsJson))
@@ -200,7 +200,7 @@ public sealed class PipelineRunner
             }
         }
 
-        return new Opening(requirements, tokens, false, false, null);
+        return new Opening(requirements, tokens, OpeningKind.Continue, null);
     }
 
     private async Task<(string? Requirements, string? DesignNotes, TokenCount Tokens)> RunAdvisorsAsync(
@@ -258,7 +258,14 @@ public sealed class PipelineRunner
         return new PipelineResult(RunOutcome.GateFailed, outputDirectory);
     }
 
-    private sealed record Opening(string? Requirements, TokenCount Tokens, bool NeedsHuman, bool Failed, string? FailureMessage);
+    private enum OpeningKind
+    {
+        Continue,
+        NeedsHuman,
+        Failed,
+    }
+
+    private sealed record Opening(string? Requirements, TokenCount Tokens, OpeningKind Kind, string? FailureMessage);
 
     private void PublishWorkspace(string workspace, string outputDirectory, bool verbose, Exception? thrown)
     {

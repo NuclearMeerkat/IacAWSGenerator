@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using IacAgent.Core;
 using IacAgent.Host.Configuration;
+using IacAgent.Host.Redaction;
 
 namespace IacAgent.Host.Recording;
 
@@ -11,7 +12,7 @@ namespace IacAgent.Host.Recording;
 public sealed class RunRecorder : IRunRecorder
 {
     private readonly GenerateRequest _request;
-    private readonly IReadOnlyList<IRedactionRule> _rules;
+    private readonly Redactor _redactor;
     private readonly string? _strongModel;
     private readonly string? _cheapModel;
     private readonly string _security;
@@ -38,7 +39,7 @@ public sealed class RunRecorder : IRunRecorder
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(rules);
         _request = request;
-        _rules = rules.ToList();
+        _redactor = new Redactor(rules);
         _strongModel = strongModel;
         _cheapModel = cheapModel;
         _security = string.IsNullOrWhiteSpace(security) ? "baseline" : security;
@@ -163,7 +164,7 @@ public sealed class RunRecorder : IRunRecorder
             StartedAtUtc = _startedAtUtc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
             DurationMs = _stopwatch.ElapsedMilliseconds,
             Profile = _request.Profile,
-            Prompt = Redact(_request.Prompt),
+            Prompt = _redactor.Redact(_request.Prompt),
             Security = _security,
             ToolVersion = _request.ToolVersion,
             Tools = new RunToolsDocument { Terraform = _terraform, Checkov = _checkov },
@@ -186,21 +187,11 @@ public sealed class RunRecorder : IRunRecorder
                 Count = _resources.Count,
                 Types = _resources.Types.ToDictionary(pair => pair.Key, pair => pair.Value),
             },
-            Assumptions = _assumptions.Select(Redact).ToList(),
+            Assumptions = _assumptions.Select(_redactor.Redact).ToList(),
             Outcome = outcome.ToString(),
             CostUsd = _costUsd,
-            Error = _error is null ? null : Redact(_error),
+            Error = _error is null ? null : _redactor.Redact(_error),
         };
-    }
-
-    private string Redact(string text)
-    {
-        foreach (var rule in _rules)
-        {
-            text = rule.Redact(text);
-        }
-
-        return text;
     }
 
     private static decimal? SumCost(decimal? left, decimal? right)

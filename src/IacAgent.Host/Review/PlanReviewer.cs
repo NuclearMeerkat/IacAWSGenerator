@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 
 using IacAgent.Core;
+using IacAgent.Host.Redaction;
 
 using Microsoft.Extensions.AI;
 
@@ -10,6 +11,7 @@ namespace IacAgent.Host.Review;
 /// <summary>Reads a Terraform plan, redacts secrets, runs Checkov, and asks the cheap model to explain the findings.</summary>
 public sealed class PlanReviewer(IEnumerable<IGate> gates, IModelRouter router, IEnumerable<IRedactionRule> rules)
 {
+    private readonly Redactor _redactor = new(rules);
     private const string SystemPrompt = """
         You explain Checkov findings on an existing Terraform plan and propose a fix for each one.
         Do not repeat secret values. Leave [redacted] as it is.
@@ -21,16 +23,16 @@ public sealed class PlanReviewer(IEnumerable<IGate> gates, IModelRouter router, 
         ArgumentException.ThrowIfNullOrWhiteSpace(planPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectory);
         var plan = await File.ReadAllTextAsync(planPath, cancellationToken).ConfigureAwait(false);
-        var redactedPlan = Redact(plan);
+        var redactedPlan = _redactor.Redact(plan);
         _ = JsonDocument.Parse(redactedPlan);
 
         var checkov = gates.Single(gate => gate.Name == "checkov");
         var result = await checkov.CheckAsync(new Artifact(sourceDirectory, []), cancellationToken).ConfigureAwait(false);
         var findings = result.Issues
-            .Select(issue => issue with { Message = Redact(issue.Message) })
+            .Select(issue => issue with { Message = _redactor.Redact(issue.Message) })
             .ToList();
         var explanation = await ExplainAsync(redactedPlan, findings, cancellationToken).ConfigureAwait(false);
-        return new PlanReview(findings, Redact(explanation));
+        return new PlanReview(findings, _redactor.Redact(explanation));
     }
 
     private async Task<string> ExplainAsync(string redactedPlan, IReadOnlyList<GateIssue> findings, CancellationToken cancellationToken)
@@ -57,16 +59,6 @@ public sealed class PlanReviewer(IEnumerable<IGate> gates, IModelRouter router, 
             router.CreateChatOptions(),
             cancellationToken).ConfigureAwait(false);
         return response.Text ?? string.Empty;
-    }
-
-    private string Redact(string text)
-    {
-        foreach (var rule in rules)
-        {
-            text = rule.Redact(text);
-        }
-
-        return text;
     }
 
     private static string Truncate(string text, int maxLength)

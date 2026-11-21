@@ -1,6 +1,7 @@
 using IacAgent.Core;
 using IacAgent.Host.Configuration;
 using IacAgent.Host.Recording;
+using IacAgent.Host.Redaction;
 
 using Microsoft.Extensions.Logging;
 
@@ -9,6 +10,7 @@ namespace IacAgent.Host.Pipeline;
 /// <summary>Asks the developer for files, runs the gates, and stops on the loop rules.</summary>
 internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IReadOnlyList<IRedactionRule> rules)
 {
+    private readonly Redactor _redactor = new(rules);
     public async Task<RepairResult> RunAsync(
         PipelineProfile profile,
         GenerateRequest request,
@@ -203,7 +205,7 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         assumptions.AddRange(result.Assumptions);
         if (!string.IsNullOrWhiteSpace(result.Review))
         {
-            await File.WriteAllTextAsync(Path.Combine(outputDirectory, "review.md"), Redact(result.Review), cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(Path.Combine(outputDirectory, "review.md"), _redactor.Redact(result.Review), cancellationToken).ConfigureAwait(false);
         }
 
         return result.Tokens ?? new TokenCount(0, 0);
@@ -222,16 +224,6 @@ internal sealed class RepairLoop(IReadOnlyList<IGate> gates, ILogger logger, IRe
         }
 
         return results;
-    }
-
-    private string Redact(string text)
-    {
-        foreach (var rule in rules)
-        {
-            text = rule.Redact(text);
-        }
-
-        return text;
     }
 
     private static GateResult DeveloperFailure(string? failureMessage)
