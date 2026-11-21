@@ -9,6 +9,7 @@ namespace IacAgent.Plugins.Agents.Trio;
 internal sealed class OrchestratorAgent(IModelRouter router, IEnumerable<IRedactionRule> rules, IUserInteraction interaction) : IAgent
 {
     private const int MaxClarificationRounds = 3;
+    private static readonly string[] TextPropertyNames = ["question", "text", "assumption", "message", "content"];
     private readonly string _prompt = ChatText.ReadPrompt("Orchestrator.md");
 
     /// <inheritdoc />
@@ -178,7 +179,38 @@ internal sealed class OrchestratorAgent(IModelRouter router, IEnumerable<IRedact
             return [];
         }
 
-        return array.EnumerateArray().Select(item => item.GetString()).Where(item => !string.IsNullOrWhiteSpace(item)).Cast<string>().ToList();
+        return array.EnumerateArray().Select(ReadText).Where(item => !string.IsNullOrWhiteSpace(item)).Cast<string>().ToList();
+    }
+
+    private static string? ReadText(JsonElement item)
+    {
+        if (item.ValueKind == JsonValueKind.String)
+        {
+            return item.GetString();
+        }
+
+        if (item.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        foreach (var name in TextPropertyNames)
+        {
+            if (item.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.String)
+            {
+                return property.GetString();
+            }
+        }
+
+        foreach (var property in item.EnumerateObject())
+        {
+            if (property.Value.ValueKind == JsonValueKind.String)
+            {
+                return property.Value.GetString();
+            }
+        }
+
+        return null;
     }
 
     private sealed record Exchange(string Question, string Answer);

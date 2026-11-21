@@ -121,6 +121,20 @@ public sealed class OrchestratorAgentTests
     }
 
     [Fact]
+    public async Task RunAsync_StringArraysContainObjects_ReadsTheTextAndContinues()
+    {
+        const string objects = """{"assumptions":[{"text":"one lambda"},{"id":1}],"questions":[{"question":"Page number or cursor?"}],"needsHuman":false,"requirements":{"summary":"store"}}""";
+        var interaction = new ScriptedInteraction("page number");
+        var client = new ScriptedChatClient(objects);
+        var result = await RunAsync(client, interaction, autoApprove: true);
+
+        Assert.Empty(interaction.Questions);
+        Assert.Contains(result.Assumptions, assumption => assumption == "one lambda");
+        Assert.Contains(result.Assumptions, assumption => assumption == "Assumed a default for: Page number or cursor?");
+        Assert.Contains("store", result.RequirementsJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RunAsync_InvalidFollowUpJson_FailsAfterOneFormatRetry()
     {
         var client = new ScriptedChatClient(Asking, "not-json", "still-not");
